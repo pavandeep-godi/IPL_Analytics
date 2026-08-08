@@ -423,7 +423,7 @@ elif "Powerplay" in metric_choice:
     )
 
     # Qualification Threshold (Min 60 balls all-time, 6 balls for a single year)
-    min_balls = 30 if view_mode == "All-Time Top 20" else 6
+    min_balls = 30 if view_mode == "All-Time Top 20" else 12
     pp_stats = pp_stats[pp_stats["Legal_Balls"] >= min_balls]
 
     # Metrics
@@ -459,7 +459,7 @@ elif "Specialists" in metric_choice:
     )
 
     # Qualification Threshold (Min 60 balls all-time, 30 balls for a single year)
-    min_balls = 30 if view_mode == "All-Time Top 20" else 6
+    min_balls = 30 if view_mode == "All-Time Top 20" else 12
     death_bowl_stats = death_bowl_stats[death_bowl_stats["Legal_Balls"] >= min_balls]
 
     # Metrics
