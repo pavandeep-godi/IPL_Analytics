@@ -100,4 +100,94 @@ fig.update_layout(yaxis={'categoryorder': 'total ascending'}, yaxis_title="", xa
 # 3. Render in Streamlit
 st.plotly_chart(fig, use_container_width=True)
 
-st.title("one - one Stats")
+st.title("Select Batter and Bowler")
+
+# Dropdown selectors using new column names 'batter' and 'bowler'
+select1 = st.selectbox('Select a batter', df['batter'].dropna().unique())
+select2 = st.selectbox('Select a bowler', df['bowler'].dropna().unique())
+
+# Filter data for selected batter vs bowler matchup
+matchup_df = df.loc[(df["batter"] == select1) & (df['bowler'] == select2)]
+
+# Filter for wickets taken by the bowler against this batter
+wickets_df = matchup_df.loc[matchup_df['bowler_wicket'] == 1]
+
+# Calculations using 'runs_batter'
+total_runs = matchup_df['runs_batter'].sum()
+sixes_df = matchup_df.loc[matchup_df['runs_batter'] == 6]
+fours_df = matchup_df.loc[matchup_df['runs_batter'] == 4]
+
+sixes = sixes_df['runs_batter'].count()
+fours = fours_df['runs_batter'].count()
+wickets = wickets_df['bowler_wicket'].count()
+
+st.title("Batter vs Bowler Stats")
+
+# --- Gauge 1: Sixes ---
+string_in_string = f"Sixes hit against {select2}"
+fig_sixes = go.Figure(go.Indicator(
+    domain={'x': [0, 1], 'y': [0, 1]},
+    value=sixes,
+    mode="gauge+number",
+    title={'text': string_in_string},
+    gauge={
+        'axis': {'range': [None, 20]},
+        'steps': [
+            {'range': [0, 10], 'color': "lightgray"},
+            {'range': [10, 15], 'color': "gray"}
+        ]
+    }
+))
+st.plotly_chart(fig_sixes, use_container_width=True)
+
+# --- Gauge 2: Fours ---
+string_in_string = f"Fours hit against {select2}"
+fig_fours = go.Figure(go.Indicator(
+    domain={'x': [0, 1], 'y': [0, 1]},
+    value=fours,
+    mode="gauge+number",
+    title={'text': string_in_string},
+    gauge={
+        'axis': {'range': [None, 20]},
+        'steps': [
+            {'range': [0, 10], 'color': "lightgray"},
+            {'range': [10, 15], 'color': "gray"}
+        ]
+    }
+))
+st.plotly_chart(fig_fours, use_container_width=True)
+
+# --- Gauge 3: Total Runs ---
+string_in_string = f"Total runs scored against {select2}"
+fig_total = go.Figure(go.Indicator(
+    domain={'x': [0, 1], 'y': [0, 1]},
+    value=total_runs,
+    mode="gauge+number",
+    title={'text': string_in_string},
+    gauge={
+        'axis': {'range': [None, 200]},
+        'steps': [
+            {'range': [0, 100], 'color': "lightgray"},
+            {'range': [100, 150], 'color': "gray"}
+        ]
+    }
+))
+st.plotly_chart(fig_total, use_container_width=True)
+
+# --- Gauge 4: Wickets / Outs ---
+string_in_string = f"Outs against {select2}"
+fig_outs = go.Figure(go.Indicator(
+    domain={'x': [0, 1], 'y': [0, 1]},
+    value=wickets,
+    mode="gauge+number",
+    title={'text': string_in_string},
+    gauge={
+        'axis': {'range': [None, 10]},
+        'steps': [
+            {'range': [0, 3], 'color': "lightgray"},
+            {'range': [3, 6], 'color': "gray"}
+        ]
+    }
+))
+st.plotly_chart(fig_outs, use_container_width=True)
+
