@@ -639,18 +639,37 @@ with tab_bowling:
 # SECTION 3: WICKETKEEPER-BATTER ANALYTICS
 # ==============================================================================
 with tab_wk:
-    st.header("🧤 WK-Batter Analysis")
+    st.header("🧤 Wicketkeeper-Batter Analysis (2008–2026)")
+
+    # Master list of IPL Wicketkeepers
+    ipl_wicketkeepers = {
+        "MS Dhoni", "Dinesh Karthik", "Wriddhiman Saha", "Robin Uthappa", "Parthiv Patel", 
+        "Naman Ojha", "Adam Gilchrist", "Kumar Sangakkara", "Brendon McCullum", "Mark Boucher",
+        "AB de Villiers", "Kamran Akmal", "Tatenda Taibu", "Luke Ronchi", "Manvinder Bisla",
+        "CM Gautam", "Aditya Tare", "Eknath Kerkar", "Shreevats Goswami", "Mahesh Rawat",
+        "Pinal Shah", "Yogesh Takawale", "Ambati Rayudu", "Rishabh Pant", "Sanju Samson",
+        "KL Rahul", "Ishan Kishan", "Jitesh Sharma", "Dhruv Jurel", "Prabhsimran Singh",
+        "Anuj Rawat", "Abhishek Porel", "Vishnu Vinod", "KS Bharat", "Kumar Kushagra",
+        "Robin Minz", "Aryan Juyal", "Kunal Rathore", "Luvnith Sisodia", "Sheldon Jackson",
+        "Baba Indrajith", "Upendra Yadav", "Urvil Patel", "Vansh Bedi", "Shrijith Krishnan",
+        "Jos Buttler", "Quinton de Kock", "Nicholas Pooran", "Heinrich Klaasen", "Phil Salt",
+        "Tristan Stubbs", "Devon Conway", "Rahmanullah Gurbaz", "Josh Inglis", "Ryan Rickelton",
+        "Shai Hope", "Donovan Ferreira", "Matthew Wade", "Tim Seifert", "Sam Billings",
+        "Alex Carey", "Ben McDermott", "Glenn Phillips", "Peter Handscomb", "Finn Allen"
+    }
 
     selected_position = st.slider(
-        "Select Batting Position Cutoff (e.g., Positions 1 to 7)",
+        "Filter Batting Position Range (e.g., Positions 1 to 7)",
         min_value=1,
         max_value=7,
         value=(1, 7),
     )
 
+    # Filter dataframe strictly for designated keepers batting within the selected position range
     df_wk = ball2ball_data[
-        (ball2ball_data["bat_pos"] >= selected_position[0])
-        & (ball2ball_data["bat_pos"] <= selected_position[1])
+        (ball2ball_data["batter"].isin(ipl_wicketkeepers)) &
+        (ball2ball_data["bat_pos"] >= selected_position[0]) &
+        (ball2ball_data["bat_pos"] <= selected_position[1])
     ].copy()
 
     if view_mode == "Year-Wise Top 20":
@@ -674,7 +693,7 @@ with tab_wk:
         .reset_index()
     )
 
-    min_balls = 50 if view_mode == "All-Time Top 20" else 20
+    min_balls = 30 if view_mode == "All-Time Top 20" else 15
     wk_stats = wk_stats[wk_stats["Balls_Faced"] >= min_balls]
 
     wk_stats["Strike Rate"] = ((wk_stats["Runs"] / wk_stats["Balls_Faced"]) * 100).round(2)
@@ -687,9 +706,9 @@ with tab_wk:
         by=["Runs", "Strike Rate"], ascending=[False, False]
     ).head(20)
     top_20.rename(
-        columns={"batter": "Wicketkeeper / Batter", "year": "Year", "Avg_Batting_Pos": "Avg Pos"},
+        columns={"batter": "Wicketkeeper", "year": "Year", "Avg_Batting_Pos": "Avg Pos"},
         inplace=True,
     )
 
-    st.subheader(f"Top WK / Top-Middle Order Performers (Batting Pos {selected_position[0]}–{selected_position[1]})")
+    st.subheader(f"Top Wicketkeepers (Batting Positions {selected_position[0]}–{selected_position[1]})")
     st.dataframe(top_20, hide_index=True, use_container_width=True)
