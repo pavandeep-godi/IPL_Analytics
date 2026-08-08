@@ -10,7 +10,7 @@ from PIL import Image
 
 st.title("IPL Analytics")
 
-image = Image.open(r"/home/pavandeep_369/Downloads/IPL_LOGO.jpg")
+image = Image.open("IPL_LOGO.jpg")
 st.image(image)
 
 st.markdown(
