@@ -340,29 +340,40 @@ if st.button("Generate Bowling Stats"):
         st.warning(f"No records found for {selected_bowler}.")
 
 
-st.title("🎯 Auction-Grade T20 Metrics")
+st.title("🎯 Top 20 Auction Leaders")
 
+# Select Metric Category
 metric_choice = st.selectbox(
-    "Select Metric",
+    "Select Auction Category",
     [
-        "Death Overs Batting Finisher Impact",
-        "Powerplay Bowling Penetration",
-        "Death Overs Bowling Specialists",
+        "🔥 Top 20 Death Overs Finishers",
+        "⚡ Top 20 Powerplay Bowlers",
+        "🛡️ Top 20 Death Overs Bowling Specialists",
     ],
 )
 
-# -------------------------------------------------------------
-# 1. Death Overs Batting Finisher Impact (Overs 16-20: over >= 15)
-# -------------------------------------------------------------
-if metric_choice == "Death Overs Batting Finisher Impact":
-    st.subheader("🔥 Death Overs Batting Impact (Min 10 Balls Faced)")
+# View Mode: All-Time Leaderboard vs Year-Wise
+view_mode = st.radio("View Mode", ["All-Time Top 20", "Year-Wise Top 20"], horizontal=True)
 
-    # Filter Death Overs (Overs 16 to 20)
-    death_batting = ball2ball_data[ball2ball_data["over"] >= 15].copy()
+if view_mode == "Year-Wise Top 20":
+    selected_year = st.selectbox("Select Year", sorted(ball2ball_data["year"].unique(), reverse=True))
 
-    # Aggregate by Season and Batter
+# -------------------------------------------------------------
+# 1. Top 20 Death Overs Finishers (Overs 16–20: over >= 15)
+# -------------------------------------------------------------
+if "Finishers" in metric_choice:
+    st.subheader("🔥 Top 20 Death Overs Finishers")
+
+    # Filter Death Overs
+    df_filtered = ball2ball_data[ball2ball_data["over"] >= 15].copy()
+    if view_mode == "Year-Wise Top 20":
+        df_filtered = df_filtered[df_filtered["year"] == selected_year]
+
+    # Grouping columns based on view mode
+    group_cols = ["batter"] if view_mode == "All-Time Top 20" else ["year", "batter"]
+
     death_stats = (
-        death_batting.groupby(["year", "batter"])
+        df_filtered.groupby(group_cols)
         .agg(
             Runs=("runs_batter", "sum"),
             Balls_Faced=("valid_ball", "sum"),
@@ -372,75 +383,73 @@ if metric_choice == "Death Overs Batting Finisher Impact":
         .reset_index()
     )
 
-    # Filter players who faced at least 10 balls in death overs
-    death_stats = death_stats[death_stats["Balls_Faced"] >= 10]
+    # Qualification Threshold (Min 30 balls all-time, 10 balls for a single year)
+    min_balls = 30 if view_mode == "All-Time Top 20" else 10
+    death_stats = death_stats[death_stats["Balls_Faced"] >= min_balls]
 
-    # Calculate Strike Rate and Boundary %
-    death_stats["Strike Rate"] = (
-        (death_stats["Runs"] / death_stats["Balls_Faced"]) * 100
-    ).round(2)
+    # Metrics
+    death_stats["Strike Rate"] = ((death_stats["Runs"] / death_stats["Balls_Faced"]) * 100).round(2)
     death_stats["Boundary %"] = (
-        (
-            ((death_stats["Fours"] * 4) + (death_stats["Sixes"] * 6))
-            / death_stats["Runs"]
-        )
-        * 100
+        (((death_stats["Fours"] * 4) + (death_stats["Sixes"] * 6)) / death_stats["Runs"]) * 100
     ).round(2)
 
-    death_stats.sort_values(by="Strike Rate", ascending=False, inplace=True)
-    st.dataframe(death_stats, hide_index=True)
+    # Sort & Get Top 20
+    top_20 = death_stats.sort_values(by="Strike Rate", ascending=False).head(20)
+    top_20.rename(columns={"batter": "Batter", "year": "Year"}, inplace=True)
 
+    st.dataframe(top_20, hide_index=True, use_container_width=True)
 
 # -------------------------------------------------------------
-# 2. Powerplay Bowling Penetration (Overs 1-6: over < 6)
+# 2. Top 20 Powerplay Bowlers (Overs 1–6: over < 6)
 # -------------------------------------------------------------
-elif metric_choice == "Powerplay Bowling Penetration":
-    st.subheader("⚡ Powerplay Bowling Performance (Overs 1–6)")
+elif "Powerplay" in metric_choice:
+    st.subheader("⚡ Top 20 Powerplay Bowlers")
 
-    # Filter Powerplay Overs
-    pp_bowling = ball2ball_data[ball2ball_data["over"] < 6].copy()
+    df_filtered = ball2ball_data[ball2ball_data["over"] < 6].copy()
+    if view_mode == "Year-Wise Top 20":
+        df_filtered = df_filtered[df_filtered["year"] == selected_year]
 
-    # Aggregate by Season and Bowler
+    group_cols = ["bowler"] if view_mode == "All-Time Top 20" else ["year", "bowler"]
+
     pp_stats = (
-        pp_bowling.groupby(["year", "bowler"])
+        df_filtered.groupby(group_cols)
         .agg(
+            Wickets=("bowler_wicket", "sum"),
             Runs_Conceded=("runs_bowler", "sum"),
             Legal_Balls=("valid_ball", "sum"),
-            Wickets=("bowler_wicket", "sum"),
             Dot_Balls=("runs_total", lambda x: (x == 0).sum()),
         )
         .reset_index()
     )
 
-    # Filter bowlers who bowled at least 1 over (6 legal balls) in PP
-    pp_stats = pp_stats[pp_stats["Legal_Balls"] >= 6]
+    # Qualification Threshold (Min 60 balls all-time, 6 balls for a single year)
+    min_balls = 30 if view_mode == "All-Time Top 20" else 6
+    pp_stats = pp_stats[pp_stats["Legal_Balls"] >= min_balls]
 
-    # Calculate Economy & Dot Ball %
-    pp_stats["Economy Rate"] = (
-        pp_stats["Runs_Conceded"] / (pp_stats["Legal_Balls"] / 6)
-    ).round(2)
-    pp_stats["Dot Ball %"] = (
-        (pp_stats["Dot_Balls"] / pp_stats["Legal_Balls"]) * 100
-    ).round(2)
+    # Metrics
+    pp_stats["Economy Rate"] = (pp_stats["Runs_Conceded"] / (pp_stats["Legal_Balls"] / 6)).round(2)
+    pp_stats["Dot Ball %"] = ((pp_stats["Dot_Balls"] / pp_stats["Legal_Balls"]) * 100).round(2)
 
-    pp_stats.sort_values(
-        by=["Wickets", "Economy Rate"], ascending=[False, True], inplace=True
-    )
-    st.dataframe(pp_stats, hide_index=True)
+    # Sort by Most Wickets, then lowest Economy & Get Top 20
+    top_20 = pp_stats.sort_values(by=["Wickets", "Economy Rate"], ascending=[False, True]).head(20)
+    top_20.rename(columns={"bowler": "Bowler", "year": "Year"}, inplace=True)
 
+    st.dataframe(top_20, hide_index=True, use_container_width=True)
 
 # -------------------------------------------------------------
-# 3. Death Overs Bowling Specialists (Overs 16-20: over >= 15)
+# 3. Top 20 Death Overs Bowling Specialists (Overs 16–20: over >= 15)
 # -------------------------------------------------------------
-elif metric_choice == "Death Overs Bowling Specialists":
-    st.subheader("🛡️ Death Overs Bowling Economy (Min 30 Balls)")
+elif "Specialists" in metric_choice:
+    st.subheader("🛡️ Top 20 Death Overs Bowling Specialists")
 
-    # Filter Death Overs
-    death_bowling = ball2ball_data[ball2ball_data["over"] >= 15].copy()
+    df_filtered = ball2ball_data[ball2ball_data["over"] >= 15].copy()
+    if view_mode == "Year-Wise Top 20":
+        df_filtered = df_filtered[df_filtered["year"] == selected_year]
 
-    # Aggregate by Season and Bowler
+    group_cols = ["bowler"] if view_mode == "All-Time Top 20" else ["year", "bowler"]
+
     death_bowl_stats = (
-        death_bowling.groupby(["year", "bowler"])
+        df_filtered.groupby(group_cols)
         .agg(
             Runs_Conceded=("runs_bowler", "sum"),
             Legal_Balls=("valid_ball", "sum"),
@@ -449,13 +458,17 @@ elif metric_choice == "Death Overs Bowling Specialists":
         .reset_index()
     )
 
-    # Filter for bowlers with at least 6 balls bowled in death overs
-    death_bowl_stats = death_bowl_stats[death_bowl_stats["Legal_Balls"] >= 6]
+    # Qualification Threshold (Min 60 balls all-time, 30 balls for a single year)
+    min_balls = 30 if view_mode == "All-Time Top 20" else 6
+    death_bowl_stats = death_bowl_stats[death_bowl_stats["Legal_Balls"] >= min_balls]
 
-    # Calculate Economy Rate
+    # Metrics
     death_bowl_stats["Economy Rate"] = (
         death_bowl_stats["Runs_Conceded"] / (death_bowl_stats["Legal_Balls"] / 6)
     ).round(2)
 
-    death_bowl_stats.sort_values(by="Economy Rate", ascending=True, inplace=True)
-    st.dataframe(death_bowl_stats, hide_index=True)
+    # Sort by Lowest Economy Rate & Get Top 20
+    top_20 = death_bowl_stats.sort_values(by="Economy Rate", ascending=True).head(20)
+    top_20.rename(columns={"bowler": "Bowler", "year": "Year"}, inplace=True)
+
+    st.dataframe(top_20, hide_index=True, use_container_width=True)
