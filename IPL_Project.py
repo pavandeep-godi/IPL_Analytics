@@ -105,7 +105,7 @@ st.title("Select Batter and Bowler")
 
 # Dropdown selectors using new column names 'batter' and 'bowler'
 select1 = st.selectbox('Select a batter', ball2ball_data['batter'].dropna().unique())
-select2 = st.selectbox('Select a bowler', dball2ball_dataf['bowler'].dropna().unique())
+select2 = st.selectbox('Select a bowler', ball2ball_data['bowler'].dropna().unique())
 
 # Filter data for selected batter vs bowler matchup
 matchup_df = ball2ball_data.loc[(ball2ball_data["batter"] == select1) & (ball2ball_data['bowler'] == select2)]
