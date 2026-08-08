@@ -228,3 +228,40 @@ if st.button("Get Total Runs"):
     # Display the interactive Plotly gauge chart
     st.plotly_chart(fig_total_runs, use_container_width=True)
 
+st.title("Batting Statistics")
+
+# Example selection input (replace 'selected_player' with your Streamlit input variable name)
+# selected_player = st.selectbox("Select Batter", ball2ball_df['batter'].unique())
+
+if st.button("Generate Batting Stats"):
+    # 1. Filter deliveries for the selected player
+    player_deliveries = ball2ball_data[ball2ball_data['batter'] == selected_batter]
+
+    if not player_deliveries.empty:
+        # 2. Calculate total runs scored in each match per season (Vectorized)
+        match_scores = (
+            player_deliveries.groupby(['season', 'match_id'])['runs_batter']
+            .sum()
+            .reset_index(name='runs')
+        )
+
+        # 3. Aggregate 30s, 50s, and 100s per season
+        # Note: Standard cricket rules treat 50s as 50-99 and 100s as 100+.
+        season_summary = (
+            match_scores.groupby('season')
+            .agg(
+                Centuries=('runs', lambda x: (x >= 100).sum()),
+                Fifties=('runs', lambda x: ((x >= 50) & (x < 100)).sum()),
+                Thirties=('runs', lambda x: ((x >= 30) & (x < 50)).sum()),
+            )
+            .reset_index()
+        )
+
+        # 4. Insert Player Name & Clean Up Output Formatting
+        season_summary.insert(0, 'Player', selected_player)
+        season_summary.rename(columns={'season': 'Season'}, inplace=True)
+
+        # Display clean dataframe without index
+        st.dataframe(season_summary, hide_index=True)
+    else:
+        st.warning(f"No records found for {selected_player}.")
