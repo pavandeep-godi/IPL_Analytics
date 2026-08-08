@@ -240,7 +240,7 @@ if st.button("Generate Batting Stats"):
     if not player_deliveries.empty:
         # 2. Calculate total runs scored in each match per season (Vectorized)
         match_scores = (
-            player_deliveries.groupby(['season', 'match_id'])['runs_batter']
+            player_deliveries.groupby(['year', 'match_id'])['runs_batter']
             .sum()
             .reset_index(name='runs')
         )
@@ -248,7 +248,7 @@ if st.button("Generate Batting Stats"):
         # 3. Aggregate 30s, 50s, and 100s per season
         # Note: Standard cricket rules treat 50s as 50-99 and 100s as 100+.
         season_summary = (
-            match_scores.groupby('season')
+            match_scores.groupby('year')
             .agg(
                 Centuries=('runs', lambda x: (x >= 100).sum()),
                 Fifties=('runs', lambda x: ((x >= 50) & (x < 100)).sum()),
@@ -259,7 +259,7 @@ if st.button("Generate Batting Stats"):
 
         # 4. Insert Player Name & Clean Up Output Formatting
         season_summary.insert(0, 'Player', selected_batter)
-        season_summary.rename(columns={'season': 'Season'}, inplace=True)
+        season_summary.rename(columns={'year': 'Season'}, inplace=True)
 
         # Display clean dataframe without index
         st.dataframe(season_summary, hide_index=True)
