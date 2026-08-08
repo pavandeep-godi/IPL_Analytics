@@ -265,3 +265,76 @@ if st.button("Generate Batting Stats"):
         st.dataframe(season_summary, hide_index=True)
     else:
         st.warning(f"No records found for {selected_batter}.")
+
+
+st.title("Bowling Statistics")
+
+# Selectbox for selecting bowler
+selected_bowler = st.selectbox("Select Bowler", ball2ball_data["bowler"].unique())
+
+if st.button("Generate Bowling Stats"):
+    # 1. Filter deliveries for the selected bowler
+    bowler_deliveries = ball2ball_data[
+        ball2ball_data["bowler"] == selected_bowler
+    ].copy()
+
+    if not bowler_deliveries.empty:
+        # 2. Identify wickets credited to the bowler
+        # (Excludes run outs, retired hurt, etc.)
+        if "bowler_wicket" in bowler_deliveries.columns:
+            bowler_deliveries["is_bowler_wicket"] = (
+                bowler_deliveries["bowler_wicket"].fillna(0).astype(int)
+            )
+        else:
+            # Fallback using wicket_kind if bowler_wicket isn't boolean
+            non_bowler_dismissals = [
+                "run out",
+                "retired hurt",
+                "retired out",
+                "obstructing the field",
+            ]
+            bowler_deliveries["is_bowler_wicket"] = (
+                bowler_deliveries["wicket_kind"].notna()
+                & ~bowler_deliveries["wicket_kind"].isin(non_bowler_dismissals)
+            ).astype(int)
+
+        # 3. Calculate wickets taken per match in each season (Vectorized)
+        match_wickets = (
+            bowler_deliveries.groupby(["year", "match_id"])[
+                "is_bowler_wicket"
+            ]
+            .sum()
+            .reset_index(name="wickets")
+        )
+
+        # 4. Aggregate total wickets, 3-wicket hauls, and 5-wicket hauls per season
+        # Note: 3W hauls are calculated for 3 or 4 wickets; 5W hauls are 5+ wickets.
+        season_summary = (
+            match_wickets.groupby("year")
+            .agg(
+                Total_Wickets=("wickets", "sum"),
+                Five_Wicket_Hauls=("wickets", lambda x: (x >= 5).sum()),
+                Three_Wicket_Hauls=(
+                    "wickets",
+                    lambda x: ((x >= 3) & (x < 5)).sum(),
+                ),
+            )
+            .reset_index()
+        )
+
+        # 5. Insert Player Name & Rename Columns for Display
+        season_summary.insert(0, "Player", selected_bowler)
+        season_summary.rename(
+            columns={
+                "year": "Season",
+                "Total_Wickets": "Total Wickets",
+                "Five_Wicket_Hauls": "5W Hauls",
+                "Three_Wicket_Hauls": "3W Hauls (3-4 Wkts)",
+            },
+            inplace=True,
+        )
+
+        # Display clean dataframe without index
+        st.dataframe(season_summary, hide_index=True)
+    else:
+        st.warning(f"No records found for {selected_bowler}.")
