@@ -17,7 +17,7 @@ st.markdown(
     "The Indian Premier League (IPL) is a high-energy Twenty20 cricket tournament played in India."
 )
 
-Matches_data = pd.read_excel("/home/pavandeep_369/Work/Matches_Data.xlsx",engine="openpyxl",index_col=0)
+Matches_data = pd.read_excel("Matches_Data.xlsx",engine="openpyxl",index_col=0)
 
 #season wise winners
 Season_winners=Matches_data.loc[Matches_data.groupby('year')['date'].idxmax()].reset_index()
