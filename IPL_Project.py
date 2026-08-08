@@ -639,7 +639,7 @@ with tab_bowling:
 # SECTION 3: WICKETKEEPER-BATTER ANALYTICS
 # ==============================================================================
 with tab_wk:
-    st.header("🧤 Wicketkeeper-Batter Analysis")
+    st.header("🧤 WK-Batter Analysis")
 
     selected_position = st.slider(
         "Select Batting Position Cutoff (e.g., Positions 1 to 7)",
