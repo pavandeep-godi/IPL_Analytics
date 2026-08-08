@@ -338,3 +338,124 @@ if st.button("Generate Bowling Stats"):
         st.dataframe(season_summary, hide_index=True)
     else:
         st.warning(f"No records found for {selected_bowler}.")
+
+
+t.title("🎯 Auction-Grade T20 Metrics")
+
+metric_choice = st.selectbox(
+    "Select Metric",
+    [
+        "Death Overs Batting Finisher Impact",
+        "Powerplay Bowling Penetration",
+        "Death Overs Bowling Specialists",
+    ],
+)
+
+# -------------------------------------------------------------
+# 1. Death Overs Batting Finisher Impact (Overs 16-20: over >= 15)
+# -------------------------------------------------------------
+if metric_choice == "Death Overs Batting Finisher Impact":
+    st.subheader("🔥 Death Overs Batting Impact (Min 10 Balls Faced)")
+
+    # Filter Death Overs (Overs 16 to 20)
+    death_batting = ball2ball_data[ball2ball_data["over"] >= 15].copy()
+
+    # Aggregate by Season and Batter
+    death_stats = (
+        death_batting.groupby(["year", "batter"])
+        .agg(
+            Runs=("runs_batter", "sum"),
+            Balls_Faced=("valid_ball", "sum"),
+            Fours=("runs_batter", lambda x: (x == 4).sum()),
+            Sixes=("runs_batter", lambda x: (x == 6).sum()),
+        )
+        .reset_index()
+    )
+
+    # Filter players who faced at least 10 balls in death overs
+    death_stats = death_stats[death_stats["Balls_Faced"] >= 10]
+
+    # Calculate Strike Rate and Boundary %
+    death_stats["Strike Rate"] = (
+        (death_stats["Runs"] / death_stats["Balls_Faced"]) * 100
+    ).round(2)
+    death_stats["Boundary %"] = (
+        (
+            ((death_stats["Fours"] * 4) + (death_stats["Sixes"] * 6))
+            / death_stats["Runs"]
+        )
+        * 100
+    ).round(2)
+
+    death_stats.sort_values(by="Strike Rate", ascending=False, inplace=True)
+    st.dataframe(death_stats, hide_index=True)
+
+
+# -------------------------------------------------------------
+# 2. Powerplay Bowling Penetration (Overs 1-6: over < 6)
+# -------------------------------------------------------------
+elif metric_choice == "Powerplay Bowling Penetration":
+    st.subheader("⚡ Powerplay Bowling Performance (Overs 1–6)")
+
+    # Filter Powerplay Overs
+    pp_bowling = ball2ball_data[ball2ball_data["over"] < 6].copy()
+
+    # Aggregate by Season and Bowler
+    pp_stats = (
+        pp_bowling.groupby(["year", "bowler"])
+        .agg(
+            Runs_Conceded=("runs_bowler", "sum"),
+            Legal_Balls=("valid_ball", "sum"),
+            Wickets=("bowler_wicket", "sum"),
+            Dot_Balls=("runs_total", lambda x: (x == 0).sum()),
+        )
+        .reset_index()
+    )
+
+    # Filter bowlers who bowled at least 1 over (6 legal balls) in PP
+    pp_stats = pp_stats[pp_stats["Legal_Balls"] >= 6]
+
+    # Calculate Economy & Dot Ball %
+    pp_stats["Economy Rate"] = (
+        pp_stats["Runs_Conceded"] / (pp_stats["Legal_Balls"] / 6)
+    ).round(2)
+    pp_stats["Dot Ball %"] = (
+        (pp_stats["Dot_Balls"] / pp_stats["Legal_Balls"]) * 100
+    ).round(2)
+
+    pp_stats.sort_values(
+        by=["Wickets", "Economy Rate"], ascending=[False, True], inplace=True
+    )
+    st.dataframe(pp_stats, hide_index=True)
+
+
+# -------------------------------------------------------------
+# 3. Death Overs Bowling Specialists (Overs 16-20: over >= 15)
+# -------------------------------------------------------------
+elif metric_choice == "Death Overs Bowling Specialists":
+    st.subheader("🛡️ Death Overs Bowling Economy (Min 30 Balls)")
+
+    # Filter Death Overs
+    death_bowling = ball2ball_data[ball2ball_data["over"] >= 15].copy()
+
+    # Aggregate by Season and Bowler
+    death_bowl_stats = (
+        death_bowling.groupby(["year", "bowler"])
+        .agg(
+            Runs_Conceded=("runs_bowler", "sum"),
+            Legal_Balls=("valid_ball", "sum"),
+            Wickets=("bowler_wicket", "sum"),
+        )
+        .reset_index()
+    )
+
+    # Filter for bowlers with at least 6 balls bowled in death overs
+    death_bowl_stats = death_bowl_stats[death_bowl_stats["Legal_Balls"] >= 6]
+
+    # Calculate Economy Rate
+    death_bowl_stats["Economy Rate"] = (
+        death_bowl_stats["Runs_Conceded"] / (death_bowl_stats["Legal_Balls"] / 6)
+    ).round(2)
+
+    death_bowl_stats.sort_values(by="Economy Rate", ascending=True, inplace=True)
+    st.dataframe(death_bowl_stats, hide_index=True)
