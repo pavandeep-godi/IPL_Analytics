@@ -217,7 +217,7 @@ if st.button("Get Total Runs"):
         mode="gauge+number",
         title={'text': f"Total IPL Runs: {selected_batter}"},
         gauge={
-            'axis': {'range': [None, 8000]},  # Max limit scaled for top IPL scorers
+            'axis': {'range': [None, 10000]},  # Max limit scaled for top IPL scorers
             'steps': [
                 {'range': [0, 2500], 'color': "lightgray"},
                 {'range': [2500, 5000], 'color': "gray"}
@@ -227,3 +227,4 @@ if st.button("Get Total Runs"):
 
     # Display the interactive Plotly gauge chart
     st.plotly_chart(fig_total_runs, use_container_width=True)
+
