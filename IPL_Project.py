@@ -344,7 +344,7 @@ st.title("🎯 IPL Auction Intelligence & Scouting Hub")
 
 # Main Section Tabs
 tab_batting, tab_bowling, tab_wk = st.tabs(
-    ["🏏 Batter Analytics", "⚡ Bowler Analytics", "🧤 Wicketkeeper-Batter Analytics"]
+    ["🏏 Batter Analytics", "⚡ Bowler Analytics", "🧤 WK-Batter Analytics"]
 )
 
 # Shared View Mode Control
