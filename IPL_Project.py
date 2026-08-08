@@ -99,3 +99,5 @@ fig.update_layout(yaxis={'categoryorder': 'total ascending'}, yaxis_title="", xa
 
 # 3. Render in Streamlit
 st.plotly_chart(fig, use_container_width=True)
+
+st.title("one - one Stats")
