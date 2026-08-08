@@ -340,7 +340,7 @@ if st.button("Generate Bowling Stats"):
         st.warning(f"No records found for {selected_bowler}.")
 
 
-st.title("🎯 Top 20 Auction Leaders")
+st.title("🎯 Auction Metrics")
 
 # Select Metric Category
 metric_choice = st.selectbox(
