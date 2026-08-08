@@ -100,7 +100,7 @@ fig.update_layout(yaxis={'categoryorder': 'total ascending'}, yaxis_title="", xa
 # 3. Render in Streamlit
 st.plotly_chart(fig, use_container_width=True)
 
-ball2ball_data=pd.read_csv("ball2ball.csv")
+ball2ball_data=pd.read_csv("ball2ball_df.csv")
 st.title("Select Batter and Bowler")
 
 # Dropdown selectors using new column names 'batter' and 'bowler'
