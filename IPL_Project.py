@@ -258,10 +258,10 @@ if st.button("Generate Batting Stats"):
         )
 
         # 4. Insert Player Name & Clean Up Output Formatting
-        season_summary.insert(0, 'Player', selected_player)
+        season_summary.insert(0, 'Player', selected_batter)
         season_summary.rename(columns={'season': 'Season'}, inplace=True)
 
         # Display clean dataframe without index
         st.dataframe(season_summary, hide_index=True)
     else:
-        st.warning(f"No records found for {selected_player}.")
+        st.warning(f"No records found for {selected_batter}.")
