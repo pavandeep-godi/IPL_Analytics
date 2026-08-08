@@ -100,14 +100,15 @@ fig.update_layout(yaxis={'categoryorder': 'total ascending'}, yaxis_title="", xa
 # 3. Render in Streamlit
 st.plotly_chart(fig, use_container_width=True)
 
+ball2ball_data=pd.read_csv("ball2ball.csv")
 st.title("Select Batter and Bowler")
 
 # Dropdown selectors using new column names 'batter' and 'bowler'
-select1 = st.selectbox('Select a batter', df['batter'].dropna().unique())
-select2 = st.selectbox('Select a bowler', df['bowler'].dropna().unique())
+select1 = st.selectbox('Select a batter', ball2ball_data['batter'].dropna().unique())
+select2 = st.selectbox('Select a bowler', dball2ball_dataf['bowler'].dropna().unique())
 
 # Filter data for selected batter vs bowler matchup
-matchup_df = df.loc[(df["batter"] == select1) & (df['bowler'] == select2)]
+matchup_df = ball2ball_data.loc[(ball2ball_data["batter"] == select1) & (ball2ball_data['bowler'] == select2)]
 
 # Filter for wickets taken by the bowler against this batter
 wickets_df = matchup_df.loc[matchup_df['bowler_wicket'] == 1]
