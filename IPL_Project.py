@@ -659,10 +659,10 @@ with tab_wk:
     }
 
     selected_position = st.slider(
-        "Filter Batting Position Range (e.g., Positions 1 to 7)",
+        "Filter Batting Position Range (e.g., Positions 1 to 8)",
         min_value=1,
-        max_value=7,
-        value=(1, 7),
+        max_value=8,
+        value=(1, 8),
     )
 
     # Filter dataframe strictly for designated keepers batting within the selected position range
