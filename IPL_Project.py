@@ -192,3 +192,38 @@ fig_outs = go.Figure(go.Indicator(
 ))
 st.plotly_chart(fig_outs, use_container_width=True)
 
+# --- Streamlit Section Title ---
+st.title("IPL Batter Career Stats")
+
+# Clean dropdown selector for choosing a batter
+selected_batter = st.selectbox(
+    label='Select Batter', 
+    options=ball2ball_data['batter'].dropna().unique()
+)
+
+# Trigger calculation and display when button is clicked
+if st.button("Get Total Runs"):
+    
+    # Filter the main DataFrame for the selected batter
+    batter_df = ball2ball_data.loc[ball2ball_data['batter'] == selected_batter]
+    
+    # Calculate total runs using Pandas sum (fast and efficient)
+    total_runs = int(batter_df['runs_batter'].sum())
+
+    # Build Plotly Gauge Chart
+    fig_total_runs = go.Figure(go.Indicator(
+        domain={'x': [0, 1], 'y': [0, 1]},
+        value=total_runs,
+        mode="gauge+number",
+        title={'text': f"Total IPL Runs: {selected_batter}"},
+        gauge={
+            'axis': {'range': [None, 8000]},  # Max limit scaled for top IPL scorers
+            'steps': [
+                {'range': [0, 2500], 'color': "lightgray"},
+                {'range': [2500, 5000], 'color': "gray"}
+            ]
+        }
+    ))
+
+    # Display the interactive Plotly gauge chart
+    st.plotly_chart(fig_total_runs, use_container_width=True)
