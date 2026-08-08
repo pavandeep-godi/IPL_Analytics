@@ -339,6 +339,9 @@ if st.button("Generate Bowling Stats"):
     else:
         st.warning(f"No records found for {selected_bowler}.")
 
+st.title("For the below analytics, use the settings in the lef side of the page")
+
+
 st.set_page_config(page_title="IPL Auction Intelligence Hub", layout="wide")
 st.title("🎯 IPL Auction Intelligence & Scouting Hub")
 
