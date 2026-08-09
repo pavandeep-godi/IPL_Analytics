@@ -898,3 +898,174 @@ if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
             st.dataframe(display_df, use_container_width=True, hide_index=True)
         else:
             st.info("No dual-impact matches found for this player matching the threshold.")
+# ==========================================
+# FIELDING IMPACT SECTION (Independent)
+# ==========================================
+st.markdown("---")
+st.title("🧤 Fielding Impact Leaderboard")
+
+# ----------------------------------------------------
+# Step 1: Filter Fielding Events & Calculate Metrics
+# ----------------------------------------------------
+# Filter ball2ball_data for catches and run outs where fielder is listed
+fielding_data = ball2ball_data[
+    ball2ball_data['dismissal_kind'].isin(['caught', 'run out']) & 
+    ball2ball_data['fielder'].notna() & 
+    (ball2ball_data['fielder'] != '')
+].copy()
+
+if not fielding_data.empty:
+    
+    # Aggregation per fielder
+    fielding_summary = fielding_data.groupby(['fielder', 'dismissal_kind']).size().unstack(fill_value=0).reset_index()
+
+    # Ensure required columns exist
+    if 'caught' not in fielding_summary.columns:
+        fielding_summary['caught'] = 0
+    if 'run out' not in fielding_summary.columns:
+        fielding_summary['run out'] = 0
+
+    # Calculate Fielding Impact Score (FIS)
+    # Formula: Catches (1pt) + Run Outs (1.5pts)
+    fielding_summary['catches'] = fielding_summary['caught'].astype(int)
+    fielding_summary['run_outs'] = fielding_summary['run out'].astype(int)
+    fielding_summary['total_dismissals'] = fielding_summary['catches'] + fielding_summary['run_outs']
+    
+    fielding_summary['fielding_impact_score'] = (
+        fielding_summary['catches'] * 1.0 + fielding_summary['run_outs'] * 1.5
+    ).round(1)
+
+    # Sort by Fielding Impact Score in descending order
+    fielding_summary = fielding_summary.sort_values(by='fielding_impact_score', ascending=False).reset_index(drop=True)
+    fielding_summary['Rank'] = fielding_summary.index + 1
+
+    # ----------------------------------------------------
+    # Step 2: User Controls (Top N Selection)
+    # ----------------------------------------------------
+    col_ctrl1, col_ctrl2 = st.columns([1, 2])
+    with col_ctrl1:
+        top_n = st.slider("Select Top Fielders to Display", min_value=5, max_value=25, value=10, step=5)
+
+    top_fielders_df = fielding_summary.head(top_n).copy()
+
+    # ----------------------------------------------------
+    # Step 3: Top 3 Winner Podium / KPI Highlight Cards
+    # ----------------------------------------------------
+    st.markdown("### 🏆 Top Fielding Performers")
+    
+    podium_cols = st.columns(min(3, len(top_fielders_df)))
+    medals = ["🥇 1st Place", "🥈 2nd Place", "🥉 3rd Place"]
+    border_colors = ["#FFD700", "#C0C0C0", "#CD7F32"]
+    
+    for idx in range(min(3, len(top_fielders_df))):
+        row = top_fielders_df.iloc[idx]
+        with podium_cols[idx]:
+            st.markdown(
+                f"""
+                <div style="
+                    background-color: #FFFFFF;
+                    border: 1px solid #E5E7EB;
+                    border-top: 5px solid {border_colors[idx]};
+                    border-radius: 10px;
+                    padding: 16px;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+                    text-align: center;
+                ">
+                    <span style="font-size: 13px; font-weight: 700; color: #6B7280; text-transform: uppercase;">{medals[idx]}</span>
+                    <h3 style="margin: 6px 0 2px 0; font-size: 20px; color: #111827;">{row['fielder']}</h3>
+                    <div style="font-size: 28px; font-weight: 800; color: #2563EB;">{row['fielding_impact_score']} <span style="font-size: 13px; font-weight: 500; color: #6B7280;">FIS</span></div>
+                    <div style="margin-top: 8px; font-size: 12px; color: #4B5563;">
+                        🧤 <b>{row['catches']}</b> Catches &nbsp;|&nbsp; 🎯 <b>{row['run_outs']}</b> Run Outs
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ----------------------------------------------------
+    # Step 4: Modern Segmented Stacked Visual Chart
+    # ----------------------------------------------------
+    st.markdown("### 📊 Catches vs. Run Outs Breakdown")
+
+    # Reverse order so #1 appears at the top of horizontal chart
+    chart_df = top_fielders_df.iloc[::-1]
+
+    fig = go.Figure()
+
+    # Catches segment
+    fig.add_trace(go.Bar(
+        y=chart_df['fielder'],
+        x=chart_df['catches'],
+        name='Catches (1.0 pt)',
+        orientation='h',
+        marker=dict(color='#3B82F6', cornerradius=4),
+        text=chart_df['catches'],
+        textposition='inside',
+        insidetextanchor='middle',
+        textfont=dict(color='white', size=12, family='sans-serif')
+    ))
+
+    # Run Outs segment
+    fig.add_trace(go.Bar(
+        y=chart_df['fielder'],
+        x=chart_df['run_outs'],
+        name='Run Outs (1.5 pts)',
+        orientation='h',
+        marker=dict(color='#EF4444', cornerradius=4),
+        text=chart_df['run_outs'],
+        textposition='inside',
+        insidetextanchor='middle',
+        textfont=dict(color='white', size=12, family='sans-serif')
+    ))
+
+    fig.update_layout(
+        barmode='stack',
+        height=max(350, top_n * 32),
+        margin=dict(l=20, r=20, t=20, b=30),
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.02,
+            xanchor='right',
+            x=1
+        ),
+        xaxis=dict(
+            title='Total Fielding Dismissals',
+            showgrid=True,
+            gridcolor='#F3F4F6',
+            zeroline=False
+        ),
+        yaxis=dict(
+            showgrid=False,
+            tickfont=dict(size=13, color='#111827', weight='bold')
+        ),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ----------------------------------------------------
+    # Step 5: Modern Interactive Data Table
+    # ----------------------------------------------------
+    with st.expander("📄 View Full Fielding Impact Leaderboard Table"):
+        display_fielding = fielding_summary[[
+            'Rank', 'fielder', 'catches', 'run_outs', 'total_dismissals', 'fielding_impact_score'
+        ]].rename(columns={
+            'fielder': 'Fielder Name',
+            'catches': 'Catches',
+            'run_outs': 'Run Outs',
+            'total_dismissals': 'Total Dismissals',
+            'fielding_impact_score': 'Fielding Impact Score (FIS)'
+        })
+
+        st.dataframe(
+            display_fielding,
+            use_container_width=True,
+            hide_index=True
+        )
+
+else:
+    st.info("No fielding data (catches/run outs) available in the dataset.")
