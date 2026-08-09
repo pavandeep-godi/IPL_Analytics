@@ -717,26 +717,72 @@ with tab_wk:
     st.dataframe(top_20, hide_index=True, use_container_width=True)
 
 # ==========================================
+# HELPER: Modern Horizontal Progress Bar
+# ==========================================
+def create_modern_progress_bar(value, target, label, color):
+    """
+    Creates a sleek, modern horizontal progress bar using Plotly.
+    """
+    fig = go.Figure()
+    
+    # Background track (Gray)
+    fig.add_trace(go.Bar(
+        y=[label], x=[target],
+        orientation='h',
+        marker=dict(color='#E5E7EB', cornerradius=6),
+        hoverinfo='none',
+        showlegend=False
+    ))
+    
+    # Active progress track
+    fig.add_trace(go.Bar(
+        y=[label], x=[value],
+        orientation='h',
+        marker=dict(color=color, cornerradius=6),
+        text=[f" <b>{value} Matches</b>"],
+        textposition='inside',
+        insidetextanchor='start',
+        textfont=dict(color='white', size=14),
+        hoverinfo='x',
+        showlegend=False
+    ))
+
+    fig.update_layout(
+        barmode='overlay',
+        height=60,
+        margin=dict(l=0, r=20, t=5, b=5),
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[0, max(target, value + 5)]),
+        yaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=14, color='#374151')),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
+    return fig
+
+
+# ==========================================
 # ALL-ROUNDERS SECTION (Independent)
 # ==========================================
 st.markdown("---")
 st.title("⚡ Top All-Rounders Performance")
 
-MIN_CAREER_RUNS = 500     # Filter threshold: minimum career runs
-MIN_CAREER_WICKETS = 50   # Filter threshold: minimum career wickets
+# ----------------------------------------------------
+# Step 1: Filter Dataset to Find True All-Rounders Only
+# ----------------------------------------------------
+MIN_CAREER_RUNS = 50     # Threshold for minimum career runs
+MIN_CAREER_WICKETS = 5   # Threshold for minimum career wickets
 
 batting_totals = ball2ball_data.groupby('batter')['runs_batter'].sum()
 bowling_totals = ball2ball_data.groupby('bowler')['bowler_wicket'].sum()
 
-# Get players meeting both criteria
+# Identify players meeting both career thresholds
 allrounder_batters = batting_totals[batting_totals >= MIN_CAREER_RUNS].index
 allrounder_bowlers = bowling_totals[bowling_totals >= MIN_CAREER_WICKETS].index
 
 allrounders_options = sorted(list(set(allrounder_batters).intersection(set(allrounder_bowlers))))
 
-# Dropdown showing ONLY filtered all-rounders
+# Selectbox showing only qualified all-rounders
 selected_allrounder = st.selectbox(
-    label=f'Select All-Rounder ({len(allrounders_options)} players found)', 
+    label=f'Select All-Rounder ({len(allrounders_options)} players qualified)', 
     options=allrounders_options,
     key="allrounder_selectbox"
 )
@@ -744,7 +790,7 @@ selected_allrounder = st.selectbox(
 if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
     
     # ----------------------------------------------------
-    # Step 1: Calculate Match-by-Match Batting Stats (preserving Team, Opponent, Season)
+    # Step 2: Calculate Match-by-Match Batting Stats
     # ----------------------------------------------------
     batter_matches = ball2ball_data[ball2ball_data['batter'] == selected_allrounder].groupby(
         ['match_id', 'year', 'batting_team', 'bowling_team']
@@ -754,7 +800,7 @@ if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
     ).reset_index()
 
     # ----------------------------------------------------
-    # Step 2: Calculate Match-by-Match Bowling Stats
+    # Step 3: Calculate Match-by-Match Bowling Stats
     # ----------------------------------------------------
     bowler_matches = ball2ball_data[ball2ball_data['bowler'] == selected_allrounder].groupby(
         'match_id'
@@ -765,7 +811,7 @@ if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
     ).reset_index()
 
     # ----------------------------------------------------
-    # Step 3: Merge Batting & Bowling Stats per Match
+    # Step 4: Merge Batting & Bowling Stats per Match
     # ----------------------------------------------------
     match_perf = pd.merge(
         batter_matches, 
@@ -775,10 +821,10 @@ if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
     ).fillna(0)
 
     # ----------------------------------------------------
-    # Step 4: Categorize Contribution Types
+    # Step 5: Categorize the 3 Contribution Types
     # ----------------------------------------------------
     
-    # Type 1: Dual Impact in Same Match (20+ Runs AND 1+ Wicket)
+    # Type 1: Dual Impact (20+ Runs AND 1+ Wicket in same match)
     dual_impact_df = match_perf[(match_perf['runs_scored'] >= 20) & (match_perf['wickets_taken'] >= 1)].copy()
     dual_impact_count = len(dual_impact_df)
 
@@ -790,90 +836,65 @@ if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
     bowling_impact_df = match_perf[match_perf['wickets_taken'] >= 2]
     bowling_impact_count = len(bowling_impact_df)
 
-    # Overall Career Summary
+    # Career Totals
     total_career_runs = int(match_perf['runs_scored'].sum())
     total_career_wickets = int(match_perf['wickets_taken'].sum())
 
     # ----------------------------------------------------
-    # Step 5: Display Summary Metrics & Gauges
+    # Step 6: High-Level Metric Cards
     # ----------------------------------------------------
     col1, col2 = st.columns(2)
     col1.metric("Total Career Runs", f"{total_career_runs:,}")
     col2.metric("Total Career Wickets", f"{total_career_wickets:,}")
 
-    st.subheader(f"Contribution Breakdown for {selected_allrounder}")
-
-    # 1. Same-Match Dual Impact Gauge
-    fig_dual = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=dual_impact_count,
-        title={'text': "Type 1: Same-Match Dual Impact Matches<br><span style='font-size:0.8em;color:gray'>(20+ Runs AND 1+ Wicket)</span>"},
-        gauge={
-            'axis': {'range': [None, 30]},
-            'steps': [
-                {'range': [0, 10], 'color': "lightgray"},
-                {'range': [10, 20], 'color': "gray"}
-            ],
-            'bar': {'color': "#1f77b4"}
-        }
-    ))
-    st.plotly_chart(fig_dual, use_container_width=True)
-
-    # 2. Batting Impact Matches Gauge
-    fig_bat = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=batting_impact_count,
-        title={'text': "Type 2: Key Batting Contribution Matches<br><span style='font-size:0.8em;color:gray'>(Scored 30+ Runs)</span>"},
-        gauge={
-            'axis': {'range': [None, 50]},
-            'steps': [
-                {'range': [0, 15], 'color': "lightgray"},
-                {'range': [15, 30], 'color': "gray"}
-            ],
-            'bar': {'color': "#2ca02c"}
-        }
-    ))
-    st.plotly_chart(fig_bat, use_container_width=True)
-
-    # 3. Bowling Impact Matches Gauge
-    fig_bowl = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=bowling_impact_count,
-        title={'text': "Type 3: Key Bowling Contribution Matches<br><span style='font-size:0.8em;color:gray'>(Took 2+ Wickets)</span>"},
-        gauge={
-            'axis': {'range': [None, 50]},
-            'steps': [
-                {'range': [0, 15], 'color': "lightgray"},
-                {'range': [15, 30], 'color': "gray"}
-            ],
-            'bar': {'color': "#d62728"}
-        }
-    ))
-    st.plotly_chart(fig_bowl, use_container_width=True)
+    st.markdown("### 📊 Contribution Impact Breakdown")
 
     # ----------------------------------------------------
-    # Step 6: Detailed Informative Dual Impact Table
+    # Step 7: Render Modern Horizontal Progress Bars
+    # ----------------------------------------------------
+    st.caption("🔥 **Type 1: Same-Match Dual Impact** (20+ Runs AND 1+ Wicket)")
+    st.plotly_chart(
+        create_modern_progress_bar(dual_impact_count, 25, "Dual Impact", "#2563EB"), 
+        use_container_width=True
+    )
+
+    st.caption("🏏 **Type 2: Key Batting Contribution** (30+ Runs Scored)")
+    st.plotly_chart(
+        create_modern_progress_bar(batting_impact_count, 40, "Batting Impact", "#16A34A"), 
+        use_container_width=True
+    )
+
+    st.caption("⚾ **Type 3: Key Bowling Contribution** (2+ Wickets Taken)")
+    st.plotly_chart(
+        create_modern_progress_bar(bowling_impact_count, 40, "Bowling Impact", "#DC2626"), 
+        use_container_width=True
+    )
+
+    # ----------------------------------------------------
+    # Step 8: Detailed Informative Table (match_id Removed)
     # ----------------------------------------------------
     with st.expander("📄 View Dual Impact Match Details"):
-        # Format integer columns cleanly
-        dual_impact_df['year'] = dual_impact_df['year'].astype(int)
-        dual_impact_df['runs_scored'] = dual_impact_df['runs_scored'].astype(int)
-        dual_impact_df['balls_faced'] = dual_impact_df['balls_faced'].astype(int)
-        dual_impact_df['wickets_taken'] = dual_impact_df['wickets_taken'].astype(int)
-        dual_impact_df['runs_conceded'] = dual_impact_df['runs_conceded'].astype(int)
+        if dual_impact_count > 0:
+            # Format numbers as clean integers
+            dual_impact_df['year'] = dual_impact_df['year'].astype(int)
+            dual_impact_df['runs_scored'] = dual_impact_df['runs_scored'].astype(int)
+            dual_impact_df['balls_faced'] = dual_impact_df['balls_faced'].astype(int)
+            dual_impact_df['wickets_taken'] = dual_impact_df['wickets_taken'].astype(int)
+            dual_impact_df['runs_conceded'] = dual_impact_df['runs_conceded'].astype(int)
 
-        # Rename and select informative columns (match_id removed)
-        display_df = dual_impact_df[[
-            'year', 'batting_team', 'bowling_team', 
-            'runs_scored', 'balls_faced', 'wickets_taken', 'runs_conceded'
-        ]].rename(columns={
-            'year': 'Season',
-            'batting_team': 'Team',
-            'bowling_team': 'Opponent',
-            'runs_scored': 'Runs Scored',
-            'balls_faced': 'Balls Faced',
-            'wickets_taken': 'Wickets Taken',
-            'runs_conceded': 'Runs Conceded'
-        })
-        
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+            display_df = dual_impact_df[[
+                'year', 'batting_team', 'bowling_team', 
+                'runs_scored', 'balls_faced', 'wickets_taken', 'runs_conceded'
+            ]].rename(columns={
+                'year': 'Season',
+                'batting_team': 'Team',
+                'bowling_team': 'Opponent',
+                'runs_scored': 'Runs Scored',
+                'balls_faced': 'Balls Faced',
+                'wickets_taken': 'Wickets Taken',
+                'runs_conceded': 'Runs Conceded'
+            })
+            
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No dual-impact matches found for this player matching the threshold.")
