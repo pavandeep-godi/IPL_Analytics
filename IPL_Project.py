@@ -401,7 +401,7 @@ with tab_batting:
             .reset_index()
         )
 
-        min_balls = 30 if view_mode == "All-Time Top 20" else 12
+        min_balls = 100 if view_mode == "All-Time Top 20" else 50
         stats = stats[stats["Balls_Faced"] >= min_balls]
 
         stats["Strike Rate"] = ((stats["Runs"] / stats["Balls_Faced"]) * 100).round(2)
@@ -436,7 +436,7 @@ with tab_batting:
             .reset_index()
         )
 
-        min_balls = 45 if view_mode == "All-Time Top 20" else 20
+        min_balls = 100 if view_mode == "All-Time Top 20" else 50
         stats = stats[stats["Balls_Faced"] >= min_balls]
 
         stats["Strike Rate"] = ((stats["Runs"] / stats["Balls_Faced"]) * 100).round(2)
@@ -469,7 +469,7 @@ with tab_batting:
             .reset_index()
         )
 
-        min_balls = 30 if view_mode == "All-Time Top 20" else 10
+        min_balls = 100 if view_mode == "All-Time Top 20" else 50
         stats = stats[stats["Balls_Faced"] >= min_balls]
 
         stats["Strike Rate"] = ((stats["Runs"] / stats["Balls_Faced"]) * 100).round(2)
@@ -549,7 +549,7 @@ with tab_bowling:
             .reset_index()
         )
 
-        min_balls = 60 if view_mode == "All-Time Top 20" else 18
+        min_balls = 100 if view_mode == "All-Time Top 20" else 60
         stats = stats[stats["Legal_Balls"] >= min_balls]
 
         stats["Economy Rate"] = (stats["Runs_Conceded"] / (stats["Legal_Balls"] / 6)).round(2)
@@ -576,7 +576,7 @@ with tab_bowling:
             .reset_index()
         )
 
-        min_balls = 60 if view_mode == "All-Time Top 20" else 24
+        min_balls = 100 if view_mode == "All-Time Top 20" else 60
         stats = stats[stats["Legal_Balls"] >= min_balls]
 
         stats["Economy Rate"] = (stats["Runs_Conceded"] / (stats["Legal_Balls"] / 6)).round(2)
@@ -603,7 +603,7 @@ with tab_bowling:
             .reset_index()
         )
 
-        min_balls = 60 if view_mode == "All-Time Top 20" else 30
+        min_balls = 100 if view_mode == "All-Time Top 20" else 60
         stats = stats[stats["Legal_Balls"] >= min_balls]
 
         stats["Economy Rate"] = (stats["Runs_Conceded"] / (stats["Legal_Balls"] / 6)).round(2)
@@ -627,7 +627,7 @@ with tab_bowling:
             .reset_index()
         )
 
-        min_balls = 120 if view_mode == "All-Time Top 20" else 60
+        min_balls = 100 if view_mode == "All-Time Top 20" else 60
         stats = stats[stats["Legal_Balls"] >= min_balls]
 
         stats["Economy Rate"] = (stats["Runs_Conceded"] / (stats["Legal_Balls"] / 6)).round(2)
