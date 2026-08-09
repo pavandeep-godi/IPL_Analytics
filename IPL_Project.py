@@ -715,3 +715,140 @@ with tab_wk:
 
     st.subheader(f"Top Wicketkeepers (Batting Positions {selected_position[0]}–{selected_position[1]})")
     st.dataframe(top_20, hide_index=True, use_container_width=True)
+
+# ==========================================
+# ALL-ROUNDERS SECTION (Independent)
+# ==========================================
+st.markdown("---")
+st.title("⚡ Top All-Rounders Performance")
+
+# Dropdown to select an All-Rounder using your 'batter' column
+selected_allrounder = st.selectbox(
+    label='Select All-Rounder', 
+    options=ball2ball_data['batter'].dropna().unique(),
+    key="allrounder_selectbox"
+)
+
+if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
+    
+    # ----------------------------------------------------
+    # Step 1: Calculate Match-by-Match Batting Stats
+    # ----------------------------------------------------
+    batter_matches = ball2ball_data[ball2ball_data['batter'] == selected_allrounder].groupby('match_id').agg(
+        runs_scored=('runs_batter', 'sum'),
+        balls_faced=('runs_batter', 'count')
+    ).reset_index()
+
+    # ----------------------------------------------------
+    # Step 2: Calculate Match-by-Match Bowling Stats
+    # ----------------------------------------------------
+    bowler_matches = ball2ball_data[ball2ball_data['bowler'] == selected_allrounder].groupby('match_id').agg(
+        wickets_taken=('bowler_wicket', 'sum'),
+        runs_conceded=('runs_bowler', 'sum'),
+        balls_bowled=('valid_ball', 'sum')
+    ).reset_index()
+
+    # ----------------------------------------------------
+    # Step 3: Merge Batting & Bowling Stats per Match
+    # ----------------------------------------------------
+    match_perf = pd.merge(
+        batter_matches, 
+        bowler_matches, 
+        on='match_id', 
+        how='outer'
+    ).fillna(0)
+
+    # ----------------------------------------------------
+    # Step 4: Categorize the 3 Contribution Types
+    # ----------------------------------------------------
+    
+    # Type 1: Dual Impact in Same Match (20+ Runs AND 1+ Wicket)
+    dual_impact_df = match_perf[(match_perf['runs_scored'] >= 20) & (match_perf['wickets_taken'] >= 1)]
+    dual_impact_count = len(dual_impact_df)
+
+    # Type 2: Significant Batting Contribution (30+ Runs)
+    batting_impact_df = match_perf[match_perf['runs_scored'] >= 30]
+    batting_impact_count = len(batting_impact_df)
+
+    # Type 3: Significant Bowling Contribution (2+ Wickets)
+    bowling_impact_df = match_perf[match_perf['wickets_taken'] >= 2]
+    bowling_impact_count = len(bowling_impact_df)
+
+    # Overall Career Summary
+    total_career_runs = int(match_perf['runs_scored'].sum())
+    total_career_wickets = int(match_perf['wickets_taken'].sum())
+
+    # ----------------------------------------------------
+    # Step 5: Display High-Level Summary Metrics
+    # ----------------------------------------------------
+    col1, col2 = st.columns(2)
+    col1.metric("Total Career Runs", f"{total_career_runs:,}")
+    col2.metric("Total Career Wickets", f"{total_career_wickets:,}")
+
+    st.subheader(f"Contribution Breakdown for {selected_allrounder}")
+
+    # ----------------------------------------------------
+    # Step 6: Display Gauges / Charts for the 3 Types
+    # ----------------------------------------------------
+    
+    # 1. Same-Match Dual Impact Gauge
+    fig_dual = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=dual_impact_count,
+        title={'text': "Type 1: Same-Match Dual Impact Matches<br><span style='font-size:0.8em;color:gray'>(20+ Runs AND 1+ Wicket)</span>"},
+        gauge={
+            'axis': {'range': [None, 30]},
+            'steps': [
+                {'range': [0, 10], 'color': "lightgray"},
+                {'range': [10, 20], 'color': "gray"}
+            ],
+            'bar': {'color': "#1f77b4"}
+        }
+    ))
+    st.plotly_chart(fig_dual, use_container_width=True)
+
+    # 2. Batting Impact Matches Gauge
+    fig_bat = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=batting_impact_count,
+        title={'text': "Type 2: Key Batting Contribution Matches<br><span style='font-size:0.8em;color:gray'>(Scored 30+ Runs)</span>"},
+        gauge={
+            'axis': {'range': [None, 50]},
+            'steps': [
+                {'range': [0, 15], 'color': "lightgray"},
+                {'range': [15, 30], 'color': "gray"}
+            ],
+            'bar': {'color': "#2ca02c"}
+        }
+    ))
+    st.plotly_chart(fig_bat, use_container_width=True)
+
+    # 3. Bowling Impact Matches Gauge
+    fig_bowl = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=bowling_impact_count,
+        title={'text': "Type 3: Key Bowling Contribution Matches<br><span style='font-size:0.8em;color:gray'>(Took 2+ Wickets)</span>"},
+        gauge={
+            'axis': {'range': [None, 50]},
+            'steps': [
+                {'range': [0, 15], 'color': "lightgray"},
+                {'range': [15, 30], 'color': "gray"}
+            ],
+            'bar': {'color': "#d62728"}
+        }
+    ))
+    st.plotly_chart(fig_bowl, use_container_width=True)
+
+    # Detailed Match-by-Match Breakdown Table
+    with st.expander("View Dual Impact Match Details"):
+        st.dataframe(
+            dual_impact_df[['match_id', 'runs_scored', 'balls_faced', 'wickets_taken', 'runs_conceded']]
+            .rename(columns={
+                'match_id': 'Match ID',
+                'runs_scored': 'Runs Scored',
+                'balls_faced': 'Balls Faced',
+                'wickets_taken': 'Wickets Taken',
+                'runs_conceded': 'Runs Conceded'
+            }),
+            use_container_width=True
+        )
