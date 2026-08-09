@@ -722,19 +722,33 @@ with tab_wk:
 st.markdown("---")
 st.title("⚡ Top All-Rounders Performance")
 
-# Dropdown to select an All-Rounder using your 'batter' column
+MIN_CAREER_RUNS = 500     # Filter threshold: minimum career runs
+MIN_CAREER_WICKETS = 50   # Filter threshold: minimum career wickets
+
+batting_totals = ball2ball_data.groupby('batter')['runs_batter'].sum()
+bowling_totals = ball2ball_data.groupby('bowler')['bowler_wicket'].sum()
+
+# Get players meeting both criteria
+allrounder_batters = batting_totals[batting_totals >= MIN_CAREER_RUNS].index
+allrounder_bowlers = bowling_totals[bowling_totals >= MIN_CAREER_WICKETS].index
+
+allrounders_options = sorted(list(set(allrounder_batters).intersection(set(allrounder_bowlers))))
+
+# Dropdown showing ONLY filtered all-rounders
 selected_allrounder = st.selectbox(
-    label='Select All-Rounder', 
-    options=ball2ball_data['batter'].dropna().unique(),
+    label=f'Select All-Rounder ({len(allrounders_options)} players found)', 
+    options=allrounders_options,
     key="allrounder_selectbox"
 )
 
 if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
     
     # ----------------------------------------------------
-    # Step 1: Calculate Match-by-Match Batting Stats
+    # Step 1: Calculate Match-by-Match Batting Stats (preserving Team, Opponent, Season)
     # ----------------------------------------------------
-    batter_matches = ball2ball_data[ball2ball_data['batter'] == selected_allrounder].groupby('match_id').agg(
+    batter_matches = ball2ball_data[ball2ball_data['batter'] == selected_allrounder].groupby(
+        ['match_id', 'year', 'batting_team', 'bowling_team']
+    ).agg(
         runs_scored=('runs_batter', 'sum'),
         balls_faced=('runs_batter', 'count')
     ).reset_index()
@@ -742,7 +756,9 @@ if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
     # ----------------------------------------------------
     # Step 2: Calculate Match-by-Match Bowling Stats
     # ----------------------------------------------------
-    bowler_matches = ball2ball_data[ball2ball_data['bowler'] == selected_allrounder].groupby('match_id').agg(
+    bowler_matches = ball2ball_data[ball2ball_data['bowler'] == selected_allrounder].groupby(
+        'match_id'
+    ).agg(
         wickets_taken=('bowler_wicket', 'sum'),
         runs_conceded=('runs_bowler', 'sum'),
         balls_bowled=('valid_ball', 'sum')
@@ -759,11 +775,11 @@ if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
     ).fillna(0)
 
     # ----------------------------------------------------
-    # Step 4: Categorize the 3 Contribution Types
+    # Step 4: Categorize Contribution Types
     # ----------------------------------------------------
     
     # Type 1: Dual Impact in Same Match (20+ Runs AND 1+ Wicket)
-    dual_impact_df = match_perf[(match_perf['runs_scored'] >= 20) & (match_perf['wickets_taken'] >= 1)]
+    dual_impact_df = match_perf[(match_perf['runs_scored'] >= 20) & (match_perf['wickets_taken'] >= 1)].copy()
     dual_impact_count = len(dual_impact_df)
 
     # Type 2: Significant Batting Contribution (30+ Runs)
@@ -779,7 +795,7 @@ if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
     total_career_wickets = int(match_perf['wickets_taken'].sum())
 
     # ----------------------------------------------------
-    # Step 5: Display High-Level Summary Metrics
+    # Step 5: Display Summary Metrics & Gauges
     # ----------------------------------------------------
     col1, col2 = st.columns(2)
     col1.metric("Total Career Runs", f"{total_career_runs:,}")
@@ -787,10 +803,6 @@ if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
 
     st.subheader(f"Contribution Breakdown for {selected_allrounder}")
 
-    # ----------------------------------------------------
-    # Step 6: Display Gauges / Charts for the 3 Types
-    # ----------------------------------------------------
-    
     # 1. Same-Match Dual Impact Gauge
     fig_dual = go.Figure(go.Indicator(
         mode="gauge+number",
@@ -839,16 +851,29 @@ if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
     ))
     st.plotly_chart(fig_bowl, use_container_width=True)
 
-    # Detailed Match-by-Match Breakdown Table
-    with st.expander("View Dual Impact Match Details"):
-        st.dataframe(
-            dual_impact_df[['match_id', 'runs_scored', 'balls_faced', 'wickets_taken', 'runs_conceded']]
-            .rename(columns={
-                'match_id': 'Match ID',
-                'runs_scored': 'Runs Scored',
-                'balls_faced': 'Balls Faced',
-                'wickets_taken': 'Wickets Taken',
-                'runs_conceded': 'Runs Conceded'
-            }),
-            use_container_width=True
-        )
+    # ----------------------------------------------------
+    # Step 6: Detailed Informative Dual Impact Table
+    # ----------------------------------------------------
+    with st.expander("📄 View Dual Impact Match Details"):
+        # Format integer columns cleanly
+        dual_impact_df['year'] = dual_impact_df['year'].astype(int)
+        dual_impact_df['runs_scored'] = dual_impact_df['runs_scored'].astype(int)
+        dual_impact_df['balls_faced'] = dual_impact_df['balls_faced'].astype(int)
+        dual_impact_df['wickets_taken'] = dual_impact_df['wickets_taken'].astype(int)
+        dual_impact_df['runs_conceded'] = dual_impact_df['runs_conceded'].astype(int)
+
+        # Rename and select informative columns (match_id removed)
+        display_df = dual_impact_df[[
+            'year', 'batting_team', 'bowling_team', 
+            'runs_scored', 'balls_faced', 'wickets_taken', 'runs_conceded'
+        ]].rename(columns={
+            'year': 'Season',
+            'batting_team': 'Team',
+            'bowling_team': 'Opponent',
+            'runs_scored': 'Runs Scored',
+            'balls_faced': 'Balls Faced',
+            'wickets_taken': 'Wickets Taken',
+            'runs_conceded': 'Runs Conceded'
+        })
+        
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
