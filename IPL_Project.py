@@ -907,17 +907,17 @@ st.title("🧤 Fielding Impact Leaderboard")
 # ----------------------------------------------------
 # Step 1: Filter Fielding Events & Calculate Metrics
 # ----------------------------------------------------
-# Filter ball2ball_data for catches and run outs where fielder is listed
+# Filter ball2ball_data for catches and run outs where fielders is listed
 fielding_data = ball2ball_data[
     ball2ball_data['wicket_kind'].isin(['caught', 'run out']) & 
-    ball2ball_data['fielder'].notna() & 
-    (ball2ball_data['fielder'] != '')
+    ball2ball_data['fielders'].notna() & 
+    (ball2ball_data['fielders'] != '')
 ].copy()
 
 if not fielding_data.empty:
     
-    # Aggregation per fielder
-    fielding_summary = fielding_data.groupby(['fielder', 'wicket_kind']).size().unstack(fill_value=0).reset_index()
+    # Aggregation per fielders
+    fielding_summary = fielding_data.groupby(['fielders', 'wicket_kind']).size().unstack(fill_value=0).reset_index()
 
     # Ensure required columns exist
     if 'caught' not in fielding_summary.columns:
@@ -944,21 +944,21 @@ if not fielding_data.empty:
     # ----------------------------------------------------
     col_ctrl1, col_ctrl2 = st.columns([1, 2])
     with col_ctrl1:
-        top_n = st.slider("Select Top Fielders to Display", min_value=5, max_value=25, value=10, step=5)
+        top_n = st.slider("Select Top fielderss to Display", min_value=5, max_value=25, value=10, step=5)
 
-    top_fielders_df = fielding_summary.head(top_n).copy()
+    top_fielderss_df = fielding_summary.head(top_n).copy()
 
     # ----------------------------------------------------
     # Step 3: Top 3 Winner Podium / KPI Highlight Cards
     # ----------------------------------------------------
     st.markdown("### 🏆 Top Fielding Performers")
     
-    podium_cols = st.columns(min(3, len(top_fielders_df)))
+    podium_cols = st.columns(min(3, len(top_fielderss_df)))
     medals = ["🥇 1st Place", "🥈 2nd Place", "🥉 3rd Place"]
     border_colors = ["#FFD700", "#C0C0C0", "#CD7F32"]
     
-    for idx in range(min(3, len(top_fielders_df))):
-        row = top_fielders_df.iloc[idx]
+    for idx in range(min(3, len(top_fielderss_df))):
+        row = top_fielderss_df.iloc[idx]
         with podium_cols[idx]:
             st.markdown(
                 f"""
@@ -972,7 +972,7 @@ if not fielding_data.empty:
                     text-align: center;
                 ">
                     <span style="font-size: 13px; font-weight: 700; color: #6B7280; text-transform: uppercase;">{medals[idx]}</span>
-                    <h3 style="margin: 6px 0 2px 0; font-size: 20px; color: #111827;">{row['fielder']}</h3>
+                    <h3 style="margin: 6px 0 2px 0; font-size: 20px; color: #111827;">{row['fielders']}</h3>
                     <div style="font-size: 28px; font-weight: 800; color: #2563EB;">{row['fielding_impact_score']} <span style="font-size: 13px; font-weight: 500; color: #6B7280;">FIS</span></div>
                     <div style="margin-top: 8px; font-size: 12px; color: #4B5563;">
                         🧤 <b>{row['catches']}</b> Catches &nbsp;|&nbsp; 🎯 <b>{row['run_outs']}</b> Run Outs
@@ -990,13 +990,13 @@ if not fielding_data.empty:
     st.markdown("### 📊 Catches vs. Run Outs Breakdown")
 
     # Reverse order so #1 appears at the top of horizontal chart
-    chart_df = top_fielders_df.iloc[::-1]
+    chart_df = top_fielderss_df.iloc[::-1]
 
     fig = go.Figure()
 
     # Catches segment
     fig.add_trace(go.Bar(
-        y=chart_df['fielder'],
+        y=chart_df['fielders'],
         x=chart_df['catches'],
         name='Catches (1.0 pt)',
         orientation='h',
@@ -1009,7 +1009,7 @@ if not fielding_data.empty:
 
     # Run Outs segment
     fig.add_trace(go.Bar(
-        y=chart_df['fielder'],
+        y=chart_df['fielders'],
         x=chart_df['run_outs'],
         name='Run Outs (1.5 pts)',
         orientation='h',
@@ -1052,9 +1052,9 @@ if not fielding_data.empty:
     # ----------------------------------------------------
     with st.expander("📄 View Full Fielding Impact Leaderboard Table"):
         display_fielding = fielding_summary[[
-            'Rank', 'fielder', 'catches', 'run_outs', 'total_dismissals', 'fielding_impact_score'
+            'Rank', 'fielders', 'catches', 'run_outs', 'total_dismissals', 'fielding_impact_score'
         ]].rename(columns={
-            'fielder': 'Fielder Name',
+            'fielders': 'fielders Name',
             'catches': 'Catches',
             'run_outs': 'Run Outs',
             'total_dismissals': 'Total Dismissals',
