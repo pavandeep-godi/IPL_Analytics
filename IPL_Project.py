@@ -716,6 +716,8 @@ with tab_wk:
     st.subheader(f"Top Wicketkeepers (Batting Positions {selected_position[0]}–{selected_position[1]})")
     st.dataframe(top_20, hide_index=True, use_container_width=True)
 
+
+
 # ==========================================
 # HELPER: Modern Horizontal Progress Bar
 # ==========================================
@@ -760,164 +762,192 @@ def create_modern_progress_bar(value, target, label, color):
 
 
 # ==========================================
-# ALL-ROUNDERS SECTION (Independent)
+# ALL-ROUNDERS SECTION (Filter-Aware)
 # ==========================================
 st.markdown("---")
 st.title("⚡ Top All-Rounders Performance")
 
 # ----------------------------------------------------
-# Step 1: Filter Dataset to Find True All-Rounders Only
+# Step 0: Apply View Mode Filter (All-Time vs Year-Wise)
 # ----------------------------------------------------
-MIN_CAREER_RUNS = 50     # Threshold for minimum career runs
-MIN_CAREER_WICKETS = 5   # Threshold for minimum career wickets
+df_allround = ball2ball_data.copy()
+if 'view_mode' in locals() and view_mode == "Year-Wise Top 20":
+    df_allround = df_allround[df_allround["year"] == selected_year]
 
-batting_totals = ball2ball_data.groupby('batter')['runs_batter'].sum()
-bowling_totals = ball2ball_data.groupby('bowler')['bowler_wicket'].sum()
+# Dynamic thresholds based on view mode
+is_year_wise = ('view_mode' in locals() and view_mode == "Year-Wise Top 20")
+MIN_RUNS = 15 if is_year_wise else 50
+MIN_WICKETS = 2 if is_year_wise else 5
 
-# Identify players meeting both career thresholds
-allrounder_batters = batting_totals[batting_totals >= MIN_CAREER_RUNS].index
-allrounder_bowlers = bowling_totals[bowling_totals >= MIN_CAREER_WICKETS].index
+# ----------------------------------------------------
+# Step 1: Filter Dataset to Find Qualified All-Rounders
+# ----------------------------------------------------
+batting_totals = df_allround.groupby('batter')['runs_batter'].sum()
+bowling_totals = df_allround.groupby('bowler')['bowler_wicket'].sum()
+
+allrounder_batters = batting_totals[batting_totals >= MIN_RUNS].index
+allrounder_bowlers = bowling_totals[bowling_totals >= MIN_WICKETS].index
 
 allrounders_options = sorted(list(set(allrounder_batters).intersection(set(allrounder_bowlers))))
 
-# Selectbox showing only qualified all-rounders
-selected_allrounder = st.selectbox(
-    label=f'Select All-Rounder ({len(allrounders_options)} players qualified)', 
-    options=allrounders_options,
-    key="allrounder_selectbox"
-)
-
-if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
-    
-    # ----------------------------------------------------
-    # Step 2: Calculate Match-by-Match Batting Stats
-    # ----------------------------------------------------
-    batter_matches = ball2ball_data[ball2ball_data['batter'] == selected_allrounder].groupby(
-        ['match_id', 'year', 'batting_team', 'bowling_team']
-    ).agg(
-        runs_scored=('runs_batter', 'sum'),
-        balls_faced=('runs_batter', 'count')
-    ).reset_index()
-
-    # ----------------------------------------------------
-    # Step 3: Calculate Match-by-Match Bowling Stats
-    # ----------------------------------------------------
-    bowler_matches = ball2ball_data[ball2ball_data['bowler'] == selected_allrounder].groupby(
-        'match_id'
-    ).agg(
-        wickets_taken=('bowler_wicket', 'sum'),
-        runs_conceded=('runs_bowler', 'sum'),
-        balls_bowled=('valid_ball', 'sum')
-    ).reset_index()
-
-    # ----------------------------------------------------
-    # Step 4: Merge Batting & Bowling Stats per Match
-    # ----------------------------------------------------
-    match_perf = pd.merge(
-        batter_matches, 
-        bowler_matches, 
-        on='match_id', 
-        how='outer'
-    ).fillna(0)
-
-    # ----------------------------------------------------
-    # Step 5: Categorize the 3 Contribution Types
-    # ----------------------------------------------------
-    
-    # Type 1: Dual Impact (20+ Runs AND 1+ Wicket in same match)
-    dual_impact_df = match_perf[(match_perf['runs_scored'] >= 20) & (match_perf['wickets_taken'] >= 1)].copy()
-    dual_impact_count = len(dual_impact_df)
-
-    # Type 2: Significant Batting Contribution (30+ Runs)
-    batting_impact_df = match_perf[match_perf['runs_scored'] >= 30]
-    batting_impact_count = len(batting_impact_df)
-
-    # Type 3: Significant Bowling Contribution (2+ Wickets)
-    bowling_impact_df = match_perf[match_perf['wickets_taken'] >= 2]
-    bowling_impact_count = len(bowling_impact_df)
-
-    # Career Totals
-    total_career_runs = int(match_perf['runs_scored'].sum())
-    total_career_wickets = int(match_perf['wickets_taken'].sum())
-
-    # ----------------------------------------------------
-    # Step 6: High-Level Metric Cards
-    # ----------------------------------------------------
-    col1, col2 = st.columns(2)
-    col1.metric("Total Career Runs", f"{total_career_runs:,}")
-    col2.metric("Total Career Wickets", f"{total_career_wickets:,}")
-
-    st.markdown("### 📊 Contribution Impact Breakdown")
-
-    # ----------------------------------------------------
-    # Step 7: Render Modern Horizontal Progress Bars
-    # ----------------------------------------------------
-    st.caption("🔥 **Type 1: Same-Match Dual Impact** (20+ Runs AND 1+ Wicket)")
-    st.plotly_chart(
-        create_modern_progress_bar(dual_impact_count, 25, "Dual Impact", "#2563EB"), 
-        use_container_width=True
+if not allrounders_options:
+    st.info("No all-rounders met the threshold for the currently selected filter.")
+else:
+    # Selectbox showing qualified all-rounders
+    selected_allrounder = st.selectbox(
+        label=f'Select All-Rounder ({len(allrounders_options)} players qualified)', 
+        options=allrounders_options,
+        key="allrounder_selectbox"
     )
 
-    st.caption("🏏 **Type 2: Key Batting Contribution** (30+ Runs Scored)")
-    st.plotly_chart(
-        create_modern_progress_bar(batting_impact_count, 40, "Batting Impact", "#16A34A"), 
-        use_container_width=True
-    )
+    if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
+        
+        # ----------------------------------------------------
+        # Step 2: Calculate Match-by-Match Batting Stats
+        # ----------------------------------------------------
+        group_cols_bat = ['match_id', 'batting_team', 'bowling_team']
+        if 'year' in df_allround.columns:
+            group_cols_bat.append('year')
 
-    st.caption("⚾ **Type 3: Key Bowling Contribution** (2+ Wickets Taken)")
-    st.plotly_chart(
-        create_modern_progress_bar(bowling_impact_count, 40, "Bowling Impact", "#DC2626"), 
-        use_container_width=True
-    )
+        batter_matches = df_allround[df_allround['batter'] == selected_allrounder].groupby(
+            group_cols_bat
+        ).agg(
+            runs_scored=('runs_batter', 'sum'),
+            balls_faced=('runs_batter', 'count')
+        ).reset_index()
 
-    # ----------------------------------------------------
-    # Step 8: Detailed Informative Table (match_id Removed)
-    # ----------------------------------------------------
-    with st.expander("📄 View Dual Impact Match Details"):
-        if dual_impact_count > 0:
-            # Format numbers as clean integers
-            dual_impact_df['year'] = dual_impact_df['year'].astype(int)
-            dual_impact_df['runs_scored'] = dual_impact_df['runs_scored'].astype(int)
-            dual_impact_df['balls_faced'] = dual_impact_df['balls_faced'].astype(int)
-            dual_impact_df['wickets_taken'] = dual_impact_df['wickets_taken'].astype(int)
-            dual_impact_df['runs_conceded'] = dual_impact_df['runs_conceded'].astype(int)
+        # ----------------------------------------------------
+        # Step 3: Calculate Match-by-Match Bowling Stats
+        # ----------------------------------------------------
+        bowler_matches = df_allround[df_allround['bowler'] == selected_allrounder].groupby(
+            'match_id'
+        ).agg(
+            wickets_taken=('bowler_wicket', 'sum'),
+            runs_conceded=('runs_bowler', 'sum'),
+            balls_bowled=('valid_ball', 'sum')
+        ).reset_index()
 
-            display_df = dual_impact_df[[
-                'year', 'batting_team', 'bowling_team', 
-                'runs_scored', 'balls_faced', 'wickets_taken', 'runs_conceded'
-            ]].rename(columns={
-                'year': 'Season',
-                'batting_team': 'Team',
-                'bowling_team': 'Opponent',
-                'runs_scored': 'Runs Scored',
-                'balls_faced': 'Balls Faced',
-                'wickets_taken': 'Wickets Taken',
-                'runs_conceded': 'Runs Conceded'
-            })
-            
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No dual-impact matches found for this player matching the threshold.")
+        # ----------------------------------------------------
+        # Step 4: Merge Batting & Bowling Stats per Match
+        # ----------------------------------------------------
+        match_perf = pd.merge(
+            batter_matches, 
+            bowler_matches, 
+            on='match_id', 
+            how='outer'
+        ).fillna(0)
+
+        # ----------------------------------------------------
+        # Step 5: Categorize the 3 Contribution Types
+        # ----------------------------------------------------
+        dual_impact_df = match_perf[(match_perf['runs_scored'] >= 20) & (match_perf['wickets_taken'] >= 1)].copy()
+        dual_impact_count = len(dual_impact_df)
+
+        batting_impact_df = match_perf[match_perf['runs_scored'] >= 30]
+        batting_impact_count = len(batting_impact_df)
+
+        bowling_impact_df = match_perf[match_perf['wickets_taken'] >= 2]
+        bowling_impact_count = len(bowling_impact_df)
+
+        # Career / Selected Scope Totals
+        total_runs = int(match_perf['runs_scored'].sum())
+        total_wickets = int(match_perf['wickets_taken'].sum())
+
+        # ----------------------------------------------------
+        # Step 6: High-Level Metric Cards
+        # ----------------------------------------------------
+        col1, col2 = st.columns(2)
+        col1.metric("Total Runs", f"{total_runs:,}")
+        col2.metric("Total Wickets", f"{total_wickets:,}")
+
+        st.markdown("### 📊 Contribution Impact Breakdown")
+
+        # ----------------------------------------------------
+        # Step 7: Render Modern Horizontal Progress Bars
+        # ----------------------------------------------------
+        max_target_dual = 10 if is_year_wise else 25
+        max_target_single = 15 if is_year_wise else 40
+
+        st.caption("🔥 **Type 1: Same-Match Dual Impact** (20+ Runs AND 1+ Wicket)")
+        st.plotly_chart(
+            create_modern_progress_bar(dual_impact_count, max_target_dual, "Dual Impact", "#2563EB"), 
+            use_container_width=True
+        )
+
+        st.caption("🏏 **Type 2: Key Batting Contribution** (30+ Runs Scored)")
+        st.plotly_chart(
+            create_modern_progress_bar(batting_impact_count, max_target_single, "Batting Impact", "#16A34A"), 
+            use_container_width=True
+        )
+
+        st.caption("⚾ **Type 3: Key Bowling Contribution** (2+ Wickets Taken)")
+        st.plotly_chart(
+            create_modern_progress_bar(bowling_impact_count, max_target_single, "Bowling Impact", "#DC2626"), 
+            use_container_width=True
+        )
+
+        # ----------------------------------------------------
+        # Step 8: Detailed Informative Table
+        # ----------------------------------------------------
+        with st.expander("📄 View Dual Impact Match Details"):
+            if dual_impact_count > 0:
+                if 'year' in dual_impact_df.columns:
+                    dual_impact_df['year'] = dual_impact_df['year'].astype(int)
+                dual_impact_df['runs_scored'] = dual_impact_df['runs_scored'].astype(int)
+                dual_impact_df['balls_faced'] = dual_impact_df['balls_faced'].astype(int)
+                dual_impact_df['wickets_taken'] = dual_impact_df['wickets_taken'].astype(int)
+                dual_impact_df['runs_conceded'] = dual_impact_df['runs_conceded'].astype(int)
+
+                cols_to_display = ['batting_team', 'bowling_team', 'runs_scored', 'balls_faced', 'wickets_taken', 'runs_conceded']
+                rename_dict = {
+                    'batting_team': 'Team',
+                    'bowling_team': 'Opponent',
+                    'runs_scored': 'Runs Scored',
+                    'balls_faced': 'Balls Faced',
+                    'wickets_taken': 'Wickets Taken',
+                    'runs_conceded': 'Runs Conceded'
+                }
+
+                if 'year' in dual_impact_df.columns:
+                    cols_to_display.insert(0, 'year')
+                    rename_dict['year'] = 'Season'
+
+                display_df = dual_impact_df[cols_to_display].rename(columns=rename_dict)
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No dual-impact matches found for this player matching the threshold.")
+
+
 # ==========================================
-# FIELDING IMPACT SECTION (Independent)
+# FIELDING IMPACT SECTION (Filter-Aware)
 # ==========================================
 st.markdown("---")
 st.title("🧤 Fielding Impact Leaderboard")
 
 # ----------------------------------------------------
+# Step 0: Apply View Mode Filter (All-Time vs Year-Wise)
+# ----------------------------------------------------
+df_fielding = ball2ball_data.copy()
+if 'view_mode' in locals() and view_mode == "Year-Wise Top 20":
+    df_fielding = df_fielding[df_fielding["year"] == selected_year]
+
+# Support both 'wicket_kind' and 'dismissal_kind' column names
+dismissal_col = 'wicket_kind' if 'wicket_kind' in df_fielding.columns else 'dismissal_kind'
+fielder_col = 'fielders' if 'fielders' in df_fielding.columns else 'fielder'
+
+# ----------------------------------------------------
 # Step 1: Filter Fielding Events & Calculate Metrics
 # ----------------------------------------------------
-# Filter ball2ball_data for catches and run outs where fielders is listed
-fielding_data = ball2ball_data[
-    ball2ball_data['wicket_kind'].isin(['caught', 'run out']) & 
-    ball2ball_data['fielders'].notna() & 
-    (ball2ball_data['fielders'] != '')
+fielding_data = df_fielding[
+    df_fielding[dismissal_col].isin(['caught', 'run out']) & 
+    df_fielding[fielder_col].notna() & 
+    (df_fielding[fielder_col] != '')
 ].copy()
 
 if not fielding_data.empty:
     
-    # Aggregation per fielders
-    fielding_summary = fielding_data.groupby(['fielders', 'wicket_kind']).size().unstack(fill_value=0).reset_index()
+    # Aggregation per fielder
+    fielding_summary = fielding_data.groupby([fielder_col, dismissal_col]).size().unstack(fill_value=0).reset_index()
 
     # Ensure required columns exist
     if 'caught' not in fielding_summary.columns:
@@ -926,7 +956,6 @@ if not fielding_data.empty:
         fielding_summary['run out'] = 0
 
     # Calculate Fielding Impact Score (FIS)
-    # Formula: Catches (1pt) + Run Outs (1.5pts)
     fielding_summary['catches'] = fielding_summary['caught'].astype(int)
     fielding_summary['run_outs'] = fielding_summary['run out'].astype(int)
     fielding_summary['total_dismissals'] = fielding_summary['catches'] + fielding_summary['run_outs']
@@ -935,30 +964,41 @@ if not fielding_data.empty:
         fielding_summary['catches'] * 1.0 + fielding_summary['run_outs'] * 1.5
     ).round(1)
 
-    # Sort by Fielding Impact Score in descending order
+    # Sort by Fielding Impact Score descending
     fielding_summary = fielding_summary.sort_values(by='fielding_impact_score', ascending=False).reset_index(drop=True)
     fielding_summary['Rank'] = fielding_summary.index + 1
 
     # ----------------------------------------------------
     # Step 2: User Controls (Top N Selection)
     # ----------------------------------------------------
+    max_available_fielders = len(fielding_summary)
+    slider_max = min(25, max_available_fielders)
+    slider_min = min(5, max_available_fielders)
+
     col_ctrl1, col_ctrl2 = st.columns([1, 2])
     with col_ctrl1:
-        top_n = st.slider("Select Top fielderss to Display", min_value=5, max_value=25, value=10, step=5)
+        top_n = st.slider(
+            "Select Top Fielders to Display", 
+            min_value=slider_min, 
+            max_value=slider_max, 
+            value=min(10, slider_max), 
+            step=5,
+            key="fielding_top_n_slider"
+        )
 
-    top_fielderss_df = fielding_summary.head(top_n).copy()
+    top_fielders_df = fielding_summary.head(top_n).copy()
 
     # ----------------------------------------------------
-    # Step 3: Top 3 Winner Podium / KPI Highlight Cards
+    # Step 3: Top 3 Winner Podium Cards
     # ----------------------------------------------------
     st.markdown("### 🏆 Top Fielding Performers")
     
-    podium_cols = st.columns(min(3, len(top_fielderss_df)))
+    podium_cols = st.columns(min(3, len(top_fielders_df)))
     medals = ["🥇 1st Place", "🥈 2nd Place", "🥉 3rd Place"]
     border_colors = ["#FFD700", "#C0C0C0", "#CD7F32"]
     
-    for idx in range(min(3, len(top_fielderss_df))):
-        row = top_fielderss_df.iloc[idx]
+    for idx in range(min(3, len(top_fielders_df))):
+        row = top_fielders_df.iloc[idx]
         with podium_cols[idx]:
             st.markdown(
                 f"""
@@ -972,7 +1012,7 @@ if not fielding_data.empty:
                     text-align: center;
                 ">
                     <span style="font-size: 13px; font-weight: 700; color: #6B7280; text-transform: uppercase;">{medals[idx]}</span>
-                    <h3 style="margin: 6px 0 2px 0; font-size: 20px; color: #111827;">{row['fielders']}</h3>
+                    <h3 style="margin: 6px 0 2px 0; font-size: 20px; color: #111827;">{row[fielder_col]}</h3>
                     <div style="font-size: 28px; font-weight: 800; color: #2563EB;">{row['fielding_impact_score']} <span style="font-size: 13px; font-weight: 500; color: #6B7280;">FIS</span></div>
                     <div style="margin-top: 8px; font-size: 12px; color: #4B5563;">
                         🧤 <b>{row['catches']}</b> Catches &nbsp;|&nbsp; 🎯 <b>{row['run_outs']}</b> Run Outs
@@ -985,18 +1025,16 @@ if not fielding_data.empty:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ----------------------------------------------------
-    # Step 4: Modern Segmented Stacked Visual Chart
+    # Step 4: Segmented Stacked Chart
     # ----------------------------------------------------
     st.markdown("### 📊 Catches vs. Run Outs Breakdown")
 
-    # Reverse order so #1 appears at the top of horizontal chart
-    chart_df = top_fielderss_df.iloc[::-1]
+    chart_df = top_fielders_df.iloc[::-1]
 
     fig = go.Figure()
 
-    # Catches segment
     fig.add_trace(go.Bar(
-        y=chart_df['fielders'],
+        y=chart_df[fielder_col],
         x=chart_df['catches'],
         name='Catches (1.0 pt)',
         orientation='h',
@@ -1007,9 +1045,8 @@ if not fielding_data.empty:
         textfont=dict(color='white', size=12, family='sans-serif')
     ))
 
-    # Run Outs segment
     fig.add_trace(go.Bar(
-        y=chart_df['fielders'],
+        y=chart_df[fielder_col],
         x=chart_df['run_outs'],
         name='Run Outs (1.5 pts)',
         orientation='h',
@@ -1048,13 +1085,13 @@ if not fielding_data.empty:
     st.plotly_chart(fig, use_container_width=True)
 
     # ----------------------------------------------------
-    # Step 5: Modern Interactive Data Table
+    # Step 5: Leaderboard Table
     # ----------------------------------------------------
     with st.expander("📄 View Full Fielding Impact Leaderboard Table"):
         display_fielding = fielding_summary[[
-            'Rank', 'fielders', 'catches', 'run_outs', 'total_dismissals', 'fielding_impact_score'
+            'Rank', fielder_col, 'catches', 'run_outs', 'total_dismissals', 'fielding_impact_score'
         ]].rename(columns={
-            'fielders': 'fielders Name',
+            fielder_col: 'Fielder Name',
             'catches': 'Catches',
             'run_outs': 'Run Outs',
             'total_dismissals': 'Total Dismissals',
@@ -1068,4 +1105,4 @@ if not fielding_data.empty:
         )
 
 else:
-    st.info("No fielding data (catches/run outs) available in the dataset.")
+    st.info("No fielding data available for the selected view mode / season.")
