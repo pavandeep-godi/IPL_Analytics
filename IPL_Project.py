@@ -909,7 +909,7 @@ st.title("🧤 Fielding Impact Leaderboard")
 # ----------------------------------------------------
 # Filter ball2ball_data for catches and run outs where fielder is listed
 fielding_data = ball2ball_data[
-    ball2ball_data['dismissal_kind'].isin(['caught', 'run out']) & 
+    ball2ball_data['wicket_kind'].isin(['caught', 'run out']) & 
     ball2ball_data['fielder'].notna() & 
     (ball2ball_data['fielder'] != '')
 ].copy()
@@ -917,7 +917,7 @@ fielding_data = ball2ball_data[
 if not fielding_data.empty:
     
     # Aggregation per fielder
-    fielding_summary = fielding_data.groupby(['fielder', 'dismissal_kind']).size().unstack(fill_value=0).reset_index()
+    fielding_summary = fielding_data.groupby(['fielder', 'wicket_kind']).size().unstack(fill_value=0).reset_index()
 
     # Ensure required columns exist
     if 'caught' not in fielding_summary.columns:
