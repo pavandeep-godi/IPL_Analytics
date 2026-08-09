@@ -8,6 +8,26 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 from PIL import Image
 
+
+# Save the original method reference
+_original_plotly_chart = st.plotly_chart
+
+# Define a custom wrapper with default config
+def custom_plotly_chart(fig, *args, **kwargs):
+    # Default config to disable mode bar
+    default_config = {'displayModeBar': False}
+    
+    # Merge or set config
+    if 'config' in kwargs and kwargs['config'] is not None:
+        default_config.update(kwargs['config'])
+    kwargs['config'] = default_config
+
+    return _original_plotly_chart(fig, *args, **kwargs)
+
+# Override Streamlit's method globally
+st.plotly_chart = custom_plotly_chart
+
+
 st.title("IPL Analytics")
 
 image = Image.open("IPL_LOGO.jpg")
