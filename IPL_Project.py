@@ -810,6 +810,14 @@ else:
 st.markdown("---")
 st.title("🎯 Chase Pressure Index (CPI)")
 
+with st.expander("ℹ️ How is CPI Calculated?"):
+    st.latex(r"\text{CPI} = (\text{Strike Rate} \times 0.5) + (\text{Average} \times 0.3) + \left(\frac{\text{Runs in 180+ Targets}}{\text{Total Runs}} \times 20\right)")
+    st.markdown("""
+    * **⚡ Strike Rate (50%)** — Scoring speed during chases
+    * **📊 Average (30%)** — Consistency and match-finishing ability
+    * **🔥 High Target Bonus (20%)** — Performance under high pressure ($\ge 180$ target)
+    """)
+
 # ----------------------------------------------------
 # Step 0: Apply View Mode Filter (All-Time vs Year-Wise)
 # ----------------------------------------------------
