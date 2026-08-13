@@ -92,6 +92,7 @@ tab_batting, tab_bowling, tab_wk = st.tabs(
     ["🏏 Batter Analytics", "⚡ Bowler Analytics", "🧤 WK-Batter Analytics"]
 )
 view_mode = st.sidebar.radio("View Mode", ["All-Time Top 20", "Year-Wise Top 20"])
+selected_year = None
 # Shared View Mode Control
 @st.cache_data
 def get_filtered_data(_df: pd.DataFrame, view_mode: str, selected_year: int = None) -> pd.DataFrame:
