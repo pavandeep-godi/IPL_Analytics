@@ -1035,7 +1035,7 @@ else:
 st.markdown("---")
 st.title("🏟️ Venue Specialists")
 
-# Simple, clean calculation explanation box
+# Clean calculation explanation box
 with st.expander("ℹ️ How are Venue Performance Indices calculated?"):
     st.latex(r"\text{Batter Venue Index} = (\text{Venue SR} \times 0.5) + (\text{Venue Avg} \times 0.5)")
     st.latex(r"\text{Bowler Venue Index} = \left(\frac{100}{\text{Venue Economy}}\right) \times 0.6 + \left(\frac{100}{\text{Venue Bowling SR}}\right) \times 0.4")
@@ -1091,7 +1091,7 @@ if not df_venue.empty:
                 Innings=("match_id", "nunique"),
                 Runs=("runs_batter", "sum"),
                 Balls=("valid_ball", "sum"),
-                Dismissals=("player_out", "count"),
+                Dismissals=("player_out", lambda x: x.notna().sum()),
                 Fours=("runs_batter", lambda x: (x == 4).sum()),
                 Sixes=("runs_batter", lambda x: (x == 6).sum()),
             )
@@ -1197,9 +1197,9 @@ if not df_venue.empty:
             v_data.groupby("bowler")
             .agg(
                 Innings=("match_id", "nunique"),
-                Runs_Conceded=("runs_total", "sum"),
+                Runs_Conceded=("runs_bowler", "sum"),
                 Balls_Bowled=("valid_ball", "sum"),
-                Wickets=("is_wicket", "sum"),
+                Wickets=("bowler_wicket", "sum"),
             )
             .reset_index()
         )
@@ -1210,14 +1210,14 @@ if not df_venue.empty:
         if not bowl_summary.empty:
             bowl_summary["Economy"] = ((bowl_summary["Runs_Conceded"] / bowl_summary["Balls_Bowled"]) * 6).round(2)
             
-            # Bowling SR = Balls per Wicket (Lower is better, replaced 0 wickets with max balls to avoid divide-by-zero)
+            # Bowling SR = Balls per Wicket
             bowl_summary["Bowling_SR"] = np.where(
                 bowl_summary["Wickets"] > 0,
                 (bowl_summary["Balls_Bowled"] / bowl_summary["Wickets"]).round(2),
                 bowl_summary["Balls_Bowled"]
             )
 
-            # Bowler Venue Index calculation (Lower Eco & Lower SR give higher index score)
+            # Bowler Venue Index
             bowl_summary["Venue_Index"] = (
                 ((100 / bowl_summary["Economy"].replace(0, 1)) * 0.6) + 
                 ((100 / bowl_summary["Bowling_SR"].replace(0, 1)) * 0.4)
