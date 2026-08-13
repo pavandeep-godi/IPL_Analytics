@@ -1,149 +1,96 @@
 import base64
+from PIL import Image
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 # ==============================================================================
-# 1. STREAMLIT PAGE CONFIG (MUST BE THE FIRST ST COMMAND IN THE FILE)
+# 1. STREAMLIT CONFIGURATION (MUST BE THE FIRST STREAMLIT COMMAND)
 # ==============================================================================
-st.set_page_config(page_title="IPL Auction Intelligence Hub", layout="wide")
+st.set_page_config(
+    page_title="IPL Auction Intelligence Hub",
+    page_icon="🏏",
+    layout="wide",
+)
 
-# ==============================================================================
-# 2. PLOTLY OVERRIDE WRAPPER FOR SIMPLIFIED / MEMORY-FRIENDLY CHARTS
-# ==============================================================================
+# Global Plotly config overriding to hide modebars
 _original_plotly_chart = st.plotly_chart
 
 
 def custom_plotly_chart(fig, *args, **kwargs):
-    default_config = {"displayModeBar": False, "responsive": True}
-    if "config" in kwargs and kwargs["config"] is not None:
-        default_config.update(kwargs["config"])
-    kwargs["config"] = default_config
-    return _original_plotly_chart(fig, *args, **kwargs)
+  default_config = {"displayModeBar": False}
+  if "config" in kwargs and kwargs["config"] is not None:
+    default_config.update(kwargs["config"])
+  kwargs["config"] = default_config
+  return _original_plotly_chart(fig, *args, **kwargs)
 
 
 st.plotly_chart = custom_plotly_chart
 
 
 # ==============================================================================
-# 3. CACHED DATA LOADERS & MEMORY OPTIMIZATIONS
+# 2. DATA LOADING & HEADER SETUP
 # ==============================================================================
 @st.cache_data
-def load_ball_data(file_path: str) -> pd.DataFrame:
-    """Reads CSV once, downcasts types, and caches in memory."""
-    df = pd.read_csv(file_path)
-
-    # 1. Categorical memory reduction (saves up to 80% RAM)
-    cat_cols = [
-        "venue",
-        "batting_team",
-        "bowling_team",
-        "batter",
-        "bowler",
-        "non_striker",
-        "player_out",
-    ]
-    for col in cat_cols:
-        if col in df.columns:
-            df[col] = df[col].astype("category")
-
-    # 2. Ensure numeric types to completely avoid 'rtruediv' and calculation errors
-    num_cols = [
-        "runs_batter",
-        "runs_bowler",
-        "runs_total",
-        "valid_ball",
-        "bowler_wicket",
-        "over",
-        "bat_pos",
-        "year",
-    ]
-    for col in num_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-
-    return df
+def load_ball_by_ball_data():
+  return pd.read_csv("ball2ball_df.csv")
 
 
-@st.cache_data
-def get_filtered_data(
-    _df: pd.DataFrame, view_mode: str, selected_year: int = None
-) -> pd.DataFrame:
-    """Subsets the global dataset without duplicating the entire DataFrame in RAM."""
-    if view_mode == "Year-Wise Top 20" and selected_year is not None:
-        return _df[_df["year"] == selected_year]
-    return _df
+ball2ball_data = load_ball_by_ball_data()
 
+# Render Header with Logo Safely
+try:
 
-# Load optimized base dataset ONCE
-ball2ball_data = load_ball_data("ball2ball_df.csv")
+  def get_image_base64(path):
+    with open(path, "rb") as f:
+      return base64.b64encode(f.read()).decode()
 
+  logo_b64 = get_image_base64("IPL_LOGO.jpg")
 
-# ==============================================================================
-# 4. HEADER & BANNER HTML
-# ==============================================================================
-def get_image_base64(path):
-    try:
-        with open(path, "rb") as f:
-            return base64.b64encode(f.read()).decode()
-    except FileNotFoundError:
-        return ""
-
-
-logo_b64 = get_image_base64("IPL_LOGO.jpg")
-img_html = (
-    f'<img src="data:image/jpeg;base64,{logo_b64}" style="width: 85px; height: 85px; border-radius: 12px; object-fit: cover; border: 2px solid rgba(255,255,255,0.2);">'
-    if logo_b64
-    else ""
-)
-
-st.markdown(
-    f"""
-    <div style="
-        background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 100%);
-        padding: 24px 32px;
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        gap: 24px;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
-        margin-bottom: 25px;
-    ">
-        {img_html}
-        <div>
-            <h1 style="color: #FFFFFF; margin: 0; font-size: 2.3rem; font-weight: 800; letter-spacing: -0.5px;">
-                IPL Auction Analytics Hub
-            </h1>
-            <p style="color: #94A3B8; margin: 6px 0 0 0; font-size: 1rem; font-weight: 400;">
-                Advanced Metrics • Venue Insights • Player Valuation & Chase Pressure Indexes
-            </p>
+  st.markdown(
+      f"""
+        <div style="
+            background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 100%);
+            padding: 24px 32px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+            margin-bottom: 25px;
+        ">
+            <img src="data:image/jpeg;base64,{logo_b64}" style="width: 85px; height: 85px; border-radius: 12px; object-fit: cover; border: 2px solid rgba(255,255,255,0.2);">
+            <div>
+                <h1 style="color: #FFFFFF; margin: 0; font-size: 2.3rem; font-weight: 800; letter-spacing: -0.5px;">
+                    IPL Auction Analytics Hub
+                </h1>
+                <p style="color: #94A3B8; margin: 6px 0 0 0; font-size: 1rem; font-weight: 400;">
+                    Advanced Metrics • Venue Insights • Player Valuation & Chase Pressure Indexes
+                </p>
+            </div>
         </div>
-    </div>
-""",
-    unsafe_allow_html=True,
-)
+    """,
+      unsafe_allow_html=True,
+  )
+except Exception:
+  st.title("🎯 IPL Auction Intelligence & Scouting Hub")
 
 st.markdown(
     "For the below analytics, use the settings in the left side of the page."
 )
 
-# ==============================================================================
-# 5. GLOBAL CONTROLS & SIDEBAR
-# ==============================================================================
+# Shared View Mode Control in Sidebar
 st.sidebar.header("⚙️ Global Controls")
-view_mode = st.sidebar.radio(
-    "View Mode", ["All-Time Top 20", "Year-Wise Top 20"]
-)
+view_mode = st.sidebar.radio("View Mode", ["All-Time Top 20", "Year-Wise Top 20"])
 
-selected_year = None
 if view_mode == "Year-Wise Top 20":
-    available_years = sorted(
-        ball2ball_data["year"].unique().astype(int), reverse=True
-    )
-    selected_year = st.sidebar.selectbox("Select Year", available_years)
-
-# Active dataset subset for the current session state
-filtered_data = get_filtered_data(ball2ball_data, view_mode, selected_year)
+  selected_year = st.sidebar.selectbox(
+      "Select Year", sorted(ball2ball_data["year"].unique(), reverse=True)
+  )
 
 # Main Section Tabs
 tab_batting, tab_bowling, tab_wk = st.tabs(
@@ -155,463 +102,437 @@ tab_batting, tab_bowling, tab_wk = st.tabs(
 # SECTION 1: BATTER ANALYTICS
 # ==============================================================================
 with tab_batting:
-    st.header("🏏 Batting Performance & Phase Intelligence")
+  st.header("🏏 Batting Performance & Phase Intelligence")
 
-    batter_metric = st.selectbox(
-        "Select Batting Metric Category",
-        [
-            "🔥 Powerplay Batters (Overs 1–6)",
-            "🧱 Middle Overs Specialists (Overs 7–15)",
-            "🚀 Death Overs Finishers (Overs 16–20)",
-            "💎 Bankable Batters (400+ Runs @ 150+ SR)",
-        ],
+  batter_metric = st.selectbox(
+      "Select Batting Metric Category",
+      [
+          "🔥 Powerplay Batters (Overs 1–6)",
+          "🧱 Middle Overs Specialists (Overs 7–15)",
+          "🚀 Death Overs Finishers (Overs 16–20)",
+          "💎 Bankable Batters (400+ Runs @ 150+ SR)",
+      ],
+  )
+
+  df_bat = ball2ball_data.copy()
+  if view_mode == "Year-Wise Top 20":
+    df_bat = df_bat[df_bat["year"] == selected_year]
+
+  group_cols = ["batter"] if view_mode == "All-Time Top 20" else ["year", "batter"]
+
+  # 1. Powerplay Batters (Overs 1–6)
+  if "Powerplay" in batter_metric:
+    st.subheader("⚡ Powerplay Batters (Overs 1–6)")
+    pp_bat = df_bat[df_bat["over"] < 6]
+
+    stats = (
+        pp_bat.groupby(group_cols)
+        .agg(
+            Runs=("runs_batter", "sum"),
+            Balls_Faced=("valid_ball", "sum"),
+            Fours=("runs_batter", lambda x: (x == 4).sum()),
+            Sixes=("runs_batter", lambda x: (x == 6).sum()),
+            Dismissals=(
+                "player_out",
+                lambda x: (x.notna()).sum() if "player_out" in x else 0,
+            ),
+        )
+        .reset_index()
     )
 
-    group_cols = ["batter"] if view_mode == "All-Time Top 20" else ["year", "batter"]
+    min_balls = 100 if view_mode == "All-Time Top 20" else 50
+    stats = stats[stats["Balls_Faced"] >= min_balls]
 
-    # 1. Powerplay Batters (Overs 0 to 5, which represents Overs 1–6)
-    if "Powerplay" in batter_metric:
-        st.subheader("⚡ Powerplay Batters (Overs 1–6)")
-        pp_bat = filtered_data[filtered_data["over"] < 6]
+    stats["Strike Rate"] = (
+        (stats["Runs"] / stats["Balls_Faced"]) * 100
+    ).round(2)
+    stats["Average"] = (
+        stats["Runs"] / stats["Dismissals"].replace(0, 1)
+    ).round(2)
 
-        stats = (
-            pp_bat.groupby(group_cols, observed=True)
-            .agg(
-                Runs=("runs_batter", "sum"),
-                Balls_Faced=("valid_ball", "sum"),
-                Fours=("runs_batter", lambda x: (x == 4).sum()),
-                Sixes=("runs_batter", lambda x: (x == 6).sum()),
-                Dismissals=(
-                    "player_out",
-                    lambda x: (x.notna() & (x != "") & (x != 0)).sum(),
-                ),
-            )
-            .reset_index()
+    top_20 = stats.sort_values(
+        by=["Strike Rate", "Average"], ascending=[False, False]
+    ).head(20)
+    top_20.rename(columns={"batter": "Batter", "year": "Year"}, inplace=True)
+    st.dataframe(top_20, hide_index=True, use_container_width=True)
+
+  # 2. Middle Overs Specialists (Overs 7–15)
+  elif "Middle Overs" in batter_metric:
+    st.subheader("🧱 Middle Overs Specialists (Overs 7–15)")
+    mid_bat = df_bat[(df_bat["over"] >= 6) & (df_bat["over"] < 15)]
+
+    stats = (
+        mid_bat.groupby(group_cols)
+        .agg(
+            Runs=("runs_batter", "sum"),
+            Balls_Faced=("valid_ball", "sum"),
+            Dot_Balls=("runs_batter", lambda x: (x == 0).sum()),
+            Fours=("runs_batter", lambda x: (x == 4).sum()),
+            Sixes=("runs_batter", lambda x: (x == 6).sum()),
+            Dismissals=(
+                "player_out",
+                lambda x: (x.notna()).sum() if "player_out" in x else 0,
+            ),
         )
+        .reset_index()
+    )
 
-        min_balls = 100 if view_mode == "All-Time Top 20" else 50
-        stats = stats[stats["Balls_Faced"] >= min_balls]
+    min_balls = 100 if view_mode == "All-Time Top 20" else 50
+    stats = stats[stats["Balls_Faced"] >= min_balls]
 
-        # Prevent rtruediv division errors using numpy / replace
-        stats["Strike Rate"] = (
-            (stats["Runs"] / stats["Balls_Faced"].replace(0, np.nan)) * 100
-        ).round(2)
-        stats["Average"] = (
-            stats["Runs"] / stats["Dismissals"].replace(0, 1)
-        ).round(2)
+    stats["Strike Rate"] = (
+        (stats["Runs"] / stats["Balls_Faced"]) * 100
+    ).round(2)
+    stats["Average"] = (
+        stats["Runs"] / stats["Dismissals"].replace(0, 1)
+    ).round(2)
+    stats["Dot Ball %"] = (
+        (stats["Dot_Balls"] / stats["Balls_Faced"]) * 100
+    ).round(2)
 
-        top_20 = stats.sort_values(
-            by=["Strike Rate", "Average"], ascending=[False, False]
-        ).head(20)
-        top_20.rename(
-            columns={"batter": "Batter", "year": "Year"}, inplace=True
+    top_20 = stats.sort_values(
+        by=["Average", "Strike Rate"], ascending=[False, False]
+    ).head(20)
+    top_20.rename(columns={"batter": "Batter", "year": "Year"}, inplace=True)
+    st.dataframe(top_20, hide_index=True, use_container_width=True)
+
+  # 3. Death Overs Finishers (Overs 16–20)
+  elif "Death Overs Finishers" in batter_metric:
+    st.subheader("🚀 Death Overs Finishers (Overs 16–20)")
+    death_bat = df_bat[df_bat["over"] >= 15]
+
+    stats = (
+        death_bat.groupby(group_cols)
+        .agg(
+            Runs=("runs_batter", "sum"),
+            Balls_Faced=("valid_ball", "sum"),
+            Fours=("runs_batter", lambda x: (x == 4).sum()),
+            Sixes=("runs_batter", lambda x: (x == 6).sum()),
         )
-        st.dataframe(top_20, hide_index=True, use_container_width=True)
+        .reset_index()
+    )
 
-    # 2. Middle Overs Specialists (Overs 6–14, representing Overs 7–15)
-    elif "Middle Overs" in batter_metric:
-        st.subheader("🧱 Middle Overs Specialists (Overs 7–15)")
-        mid_bat = filtered_data[
-            (filtered_data["over"] >= 6) & (filtered_data["over"] < 15)
-        ]
+    min_balls = 100 if view_mode == "All-Time Top 20" else 50
+    stats = stats[stats["Balls_Faced"] >= min_balls]
 
-        stats = (
-            mid_bat.groupby(group_cols, observed=True)
-            .agg(
-                Runs=("runs_batter", "sum"),
-                Balls_Faced=("valid_ball", "sum"),
-                Dot_Balls=("runs_batter", lambda x: (x == 0).sum()),
-                Fours=("runs_batter", lambda x: (x == 4).sum()),
-                Sixes=("runs_batter", lambda x: (x == 6).sum()),
-                Dismissals=(
-                    "player_out",
-                    lambda x: (x.notna() & (x != "") & (x != 0)).sum(),
-                ),
-            )
-            .reset_index()
+    stats["Strike Rate"] = (
+        (stats["Runs"] / stats["Balls_Faced"]) * 100
+    ).round(2)
+    stats["Boundary %"] = (
+        (((stats["Fours"] * 4) + (stats["Sixes"] * 6)) / stats["Runs"]) * 100
+    ).round(2)
+
+    top_20 = stats.sort_values(by="Strike Rate", ascending=False).head(20)
+    top_20.rename(columns={"batter": "Batter", "year": "Year"}, inplace=True)
+    st.dataframe(top_20, hide_index=True, use_container_width=True)
+
+  # 4. Bankable Batters (400+ Runs @ 150+ SR in a Season)
+  elif "Bankable" in batter_metric:
+    st.subheader("💎 Bankable Season Performances (≥ 400 Runs & ≥ 150 SR)")
+
+    stats = (
+        ball2ball_data.groupby(["year", "batter"])
+        .agg(
+            Total_Runs=("runs_batter", "sum"),
+            Balls_Faced=("valid_ball", "sum"),
+            Fours=("runs_batter", lambda x: (x == 4).sum()),
+            Sixes=("runs_batter", lambda x: (x == 6).sum()),
         )
+        .reset_index()
+    )
 
-        min_balls = 100 if view_mode == "All-Time Top 20" else 50
-        stats = stats[stats["Balls_Faced"] >= min_balls]
+    stats["Strike Rate"] = (
+        (stats["Total_Runs"] / stats["Balls_Faced"]) * 100
+    ).round(2)
 
-        stats["Strike Rate"] = (
-            (stats["Runs"] / stats["Balls_Faced"].replace(0, np.nan)) * 100
-        ).round(2)
-        stats["Average"] = (
-            stats["Runs"] / stats["Dismissals"].replace(0, 1)
-        ).round(2)
-        stats["Dot Ball %"] = (
-            (stats["Dot_Balls"] / stats["Balls_Faced"].replace(0, np.nan))
-            * 100
-        ).round(2)
+    bankable = stats[
+        (stats["Total_Runs"] >= 400) & (stats["Strike Rate"] >= 150.0)
+    ]
 
-        top_20 = stats.sort_values(
-            by=["Average", "Strike Rate"], ascending=[False, False]
-        ).head(20)
-        top_20.rename(
-            columns={"batter": "Batter", "year": "Year"}, inplace=True
-        )
-        st.dataframe(top_20, hide_index=True, use_container_width=True)
+    if view_mode == "Year-Wise Top 20":
+      bankable = bankable[bankable["year"] == selected_year]
 
-    # 3. Death Overs Finishers (Overs 15–19, representing Overs 16–20)
-    elif "Death Overs Finishers" in batter_metric:
-        st.subheader("🚀 Death Overs Finishers (Overs 16–20)")
-        death_bat = filtered_data[filtered_data["over"] >= 15]
-
-        stats = (
-            death_bat.groupby(group_cols, observed=True)
-            .agg(
-                Runs=("runs_batter", "sum"),
-                Balls_Faced=("valid_ball", "sum"),
-                Fours=("runs_batter", lambda x: (x == 4).sum()),
-                Sixes=("runs_batter", lambda x: (x == 6).sum()),
-            )
-            .reset_index()
-        )
-
-        min_balls = 100 if view_mode == "All-Time Top 20" else 50
-        stats = stats[stats["Balls_Faced"] >= min_balls]
-
-        stats["Strike Rate"] = (
-            (stats["Runs"] / stats["Balls_Faced"].replace(0, np.nan)) * 100
-        ).round(2)
-        stats["Boundary %"] = (
-            (
-                ((stats["Fours"] * 4) + (stats["Sixes"] * 6))
-                / stats["Runs"].replace(0, np.nan)
-            )
-            * 100
-        ).round(2)
-
-        top_20 = stats.sort_values(by="Strike Rate", ascending=False).head(20)
-        top_20.rename(
-            columns={"batter": "Batter", "year": "Year"}, inplace=True
-        )
-        st.dataframe(top_20, hide_index=True, use_container_width=True)
-
-    # 4. Bankable Batters (400+ Runs @ 150+ SR in a Season)
-    elif "Bankable" in batter_metric:
-        st.subheader("💎 Bankable Season Performances (≥ 400 Runs & ≥ 150 SR)")
-
-        stats = (
-            ball2ball_data.groupby(["year", "batter"], observed=True)
-            .agg(
-                Total_Runs=("runs_batter", "sum"),
-                Balls_Faced=("valid_ball", "sum"),
-                Fours=("runs_batter", lambda x: (x == 4).sum()),
-                Sixes=("runs_batter", lambda x: (x == 6).sum()),
-            )
-            .reset_index()
-        )
-
-        stats["Strike Rate"] = (
-            (stats["Total_Runs"] / stats["Balls_Faced"].replace(0, np.nan))
-            * 100
-        ).round(2)
-
-        bankable = stats[
-            (stats["Total_Runs"] >= 400) & (stats["Strike Rate"] >= 150.0)
-        ]
-
-        if view_mode == "Year-Wise Top 20":
-            bankable = bankable[bankable["year"] == selected_year]
-
-        top_20 = bankable.sort_values(
-            by=["Total_Runs", "Strike Rate"], ascending=[False, False]
-        ).head(20)
-        top_20.rename(
-            columns={"batter": "Batter", "year": "Year"}, inplace=True
-        )
-        st.dataframe(top_20, hide_index=True, use_container_width=True)
+    top_20 = bankable.sort_values(
+        by=["Total_Runs", "Strike Rate"], ascending=[False, False]
+    ).head(20)
+    top_20.rename(columns={"batter": "Batter", "year": "Year"}, inplace=True)
+    st.dataframe(top_20, hide_index=True, use_container_width=True)
 
 
 # ==============================================================================
 # SECTION 2: BOWLER ANALYTICS
 # ==============================================================================
 with tab_bowling:
-    st.header("⚡ Bowler Intelligence")
+  st.header("⚡ Bowler Intelligence")
 
-    bowler_metric = st.selectbox(
-        "Select Bowling Metric Category",
-        [
-            "⚡ Powerplay Bowlers (Overs 1–6)",
-            "🎯 Middle Overs Wicket-Takers (Overs 7–15)",
-            "🛡️ Death Overs Specialists (Overs 16–20)",
-            "📉 Overall Economical Bowlers",
-        ],
+  bowler_metric = st.selectbox(
+      "Select Bowling Metric Category",
+      [
+          "⚡ Powerplay Bowlers (Overs 1–6)",
+          "🎯 Middle Overs Wicket-Takers (Overs 7–15)",
+          "🛡️ Death Overs Specialists (Overs 16–20)",
+          "📉 Overall Economical Bowlers",
+      ],
+  )
+
+  df_bowl = ball2ball_data.copy()
+
+  if view_mode == "Year-Wise Top 20":
+    df_bowl = df_bowl[df_bowl["year"] == selected_year]
+
+  group_cols = ["bowler"] if view_mode == "All-Time Top 20" else ["year", "bowler"]
+
+  # 1. Powerplay Bowlers
+  if "Powerplay" in bowler_metric:
+    st.subheader("⚡ Powerplay Bowlers (Overs 1–6)")
+    pp_bowl = df_bowl[df_bowl["over"] < 6]
+
+    stats = (
+        pp_bowl.groupby(group_cols)
+        .agg(
+            Wickets=("bowler_wicket", "sum"),
+            Runs_Conceded=("runs_bowler", "sum"),
+            Legal_Balls=("valid_ball", "sum"),
+            Dot_Balls=("runs_total", lambda x: (x == 0).sum()),
+        )
+        .reset_index()
     )
 
-    group_cols = ["bowler"] if view_mode == "All-Time Top 20" else ["year", "bowler"]
+    min_balls = 100 if view_mode == "All-Time Top 20" else 60
+    stats = stats[stats["Legal_Balls"] >= min_balls]
 
-    # 1. Powerplay Bowlers
-    if "Powerplay" in bowler_metric:
-        st.subheader("⚡ Powerplay Bowlers (Overs 1–6)")
-        pp_bowl = filtered_data[filtered_data["over"] < 6]
+    stats["Economy Rate"] = (
+        stats["Runs_Conceded"] / (stats["Legal_Balls"] / 6)
+    ).round(2)
+    stats["Dot Ball %"] = (
+        (stats["Dot_Balls"] / stats["Legal_Balls"]) * 100
+    ).round(2)
 
-        stats = (
-            pp_bowl.groupby(group_cols, observed=True)
-            .agg(
-                Wickets=("bowler_wicket", "sum"),
-                Runs_Conceded=("runs_bowler", "sum"),
-                Legal_Balls=("valid_ball", "sum"),
-                Dot_Balls=("runs_total", lambda x: (x == 0).sum()),
-            )
-            .reset_index()
+    top_20 = stats.sort_values(
+        by=["Wickets", "Economy Rate"], ascending=[False, True]
+    ).head(20)
+    top_20.rename(columns={"bowler": "Bowler", "year": "Year"}, inplace=True)
+    st.dataframe(top_20, hide_index=True, use_container_width=True)
+
+  # 2. Middle Overs Wicket-Takers (Overs 7–15)
+  elif "Middle Overs" in bowler_metric:
+    st.subheader("🎯 Middle Overs Wicket-Takers (Overs 7–15)")
+    mid_bowl = df_bowl[(df_bowl["over"] >= 6) & (df_bowl["over"] < 15)]
+
+    stats = (
+        mid_bowl.groupby(group_cols)
+        .agg(
+            Wickets=("bowler_wicket", "sum"),
+            Runs_Conceded=("runs_bowler", "sum"),
+            Legal_Balls=("valid_ball", "sum"),
         )
+        .reset_index()
+    )
 
-        min_balls = 100 if view_mode == "All-Time Top 20" else 60
-        stats = stats[stats["Legal_Balls"] >= min_balls]
+    min_balls = 100 if view_mode == "All-Time Top 20" else 60
+    stats = stats[stats["Legal_Balls"] >= min_balls]
 
-        overs_bowled = stats["Legal_Balls"] / 6.0
-        stats["Economy Rate"] = (
-            stats["Runs_Conceded"] / overs_bowled.replace(0, np.nan)
-        ).round(2)
-        stats["Dot Ball %"] = (
-            (stats["Dot_Balls"] / stats["Legal_Balls"].replace(0, np.nan))
-            * 100
-        ).round(2)
+    stats["Economy Rate"] = (
+        stats["Runs_Conceded"] / (stats["Legal_Balls"] / 6)
+    ).round(2)
+    stats["Bowling Avg"] = (
+        stats["Runs_Conceded"] / stats["Wickets"].replace(0, 1)
+    ).round(2)
 
-        top_20 = stats.sort_values(
-            by=["Wickets", "Economy Rate"], ascending=[False, True]
-        ).head(20)
-        top_20.rename(
-            columns={"bowler": "Bowler", "year": "Year"}, inplace=True
+    top_20 = stats.sort_values(
+        by=["Wickets", "Economy Rate"], ascending=[False, True]
+    ).head(20)
+    top_20.rename(columns={"bowler": "Bowler", "year": "Year"}, inplace=True)
+    st.dataframe(top_20, hide_index=True, use_container_width=True)
+
+  # 3. Death Overs Specialists
+  elif "Death Overs Specialists" in bowler_metric:
+    st.subheader("🛡️ Death Overs Specialists (Overs 16–20)")
+    death_bowl = df_bowl[df_bowl["over"] >= 15]
+
+    stats = (
+        death_bowl.groupby(group_cols)
+        .agg(
+            Wickets=("bowler_wicket", "sum"),
+            Runs_Conceded=("runs_bowler", "sum"),
+            Legal_Balls=("valid_ball", "sum"),
         )
-        st.dataframe(top_20, hide_index=True, use_container_width=True)
+        .reset_index()
+    )
 
-    # 2. Middle Overs Wicket-Takers
-    elif "Middle Overs" in bowler_metric:
-        st.subheader("🎯 Middle Overs Wicket-Takers (Overs 7–15)")
-        mid_bowl = filtered_data[
-            (filtered_data["over"] >= 6) & (filtered_data["over"] < 15)
-        ]
+    min_balls = 100 if view_mode == "All-Time Top 20" else 60
+    stats = stats[stats["Legal_Balls"] >= min_balls]
 
-        stats = (
-            mid_bowl.groupby(group_cols, observed=True)
-            .agg(
-                Wickets=("bowler_wicket", "sum"),
-                Runs_Conceded=("runs_bowler", "sum"),
-                Legal_Balls=("valid_ball", "sum"),
-            )
-            .reset_index()
+    stats["Economy Rate"] = (
+        stats["Runs_Conceded"] / (stats["Legal_Balls"] / 6)
+    ).round(2)
+
+    top_20 = stats.sort_values(by="Economy Rate", ascending=True).head(20)
+    top_20.rename(columns={"bowler": "Bowler", "year": "Year"}, inplace=True)
+    st.dataframe(top_20, hide_index=True, use_container_width=True)
+
+  # 4. Overall Economical Bowlers
+  elif "Economical" in bowler_metric:
+    st.subheader("📉 Overall Most Economical Bowlers")
+
+    stats = (
+        df_bowl.groupby(group_cols)
+        .agg(
+            Runs_Conceded=("runs_bowler", "sum"),
+            Legal_Balls=("valid_ball", "sum"),
+            Wickets=("bowler_wicket", "sum"),
+            Dot_Balls=("runs_total", lambda x: (x == 0).sum()),
         )
+        .reset_index()
+    )
 
-        min_balls = 100 if view_mode == "All-Time Top 20" else 60
-        stats = stats[stats["Legal_Balls"] >= min_balls]
+    min_balls = 100 if view_mode == "All-Time Top 20" else 60
+    stats = stats[stats["Legal_Balls"] >= min_balls]
 
-        overs_bowled = stats["Legal_Balls"] / 6.0
-        stats["Economy Rate"] = (
-            stats["Runs_Conceded"] / overs_bowled.replace(0, np.nan)
-        ).round(2)
-        stats["Bowling Avg"] = (
-            stats["Runs_Conceded"] / stats["Wickets"].replace(0, 1)
-        ).round(2)
+    stats["Economy Rate"] = (
+        stats["Runs_Conceded"] / (stats["Legal_Balls"] / 6)
+    ).round(2)
+    stats["Dot Ball %"] = (
+        (stats["Dot_Balls"] / stats["Legal_Balls"]) * 100
+    ).round(2)
 
-        top_20 = stats.sort_values(
-            by=["Wickets", "Economy Rate"], ascending=[False, True]
-        ).head(20)
-        top_20.rename(
-            columns={"bowler": "Bowler", "year": "Year"}, inplace=True
-        )
-        st.dataframe(top_20, hide_index=True, use_container_width=True)
-
-    # 3. Death Overs Specialists
-    elif "Death Overs Specialists" in bowler_metric:
-        st.subheader("🛡️ Death Overs Specialists (Overs 16–20)")
-        death_bowl = filtered_data[filtered_data["over"] >= 15]
-
-        stats = (
-            death_bowl.groupby(group_cols, observed=True)
-            .agg(
-                Wickets=("bowler_wicket", "sum"),
-                Runs_Conceded=("runs_bowler", "sum"),
-                Legal_Balls=("valid_ball", "sum"),
-            )
-            .reset_index()
-        )
-
-        min_balls = 100 if view_mode == "All-Time Top 20" else 60
-        stats = stats[stats["Legal_Balls"] >= min_balls]
-
-        overs_bowled = stats["Legal_Balls"] / 6.0
-        stats["Economy Rate"] = (
-            stats["Runs_Conceded"] / overs_bowled.replace(0, np.nan)
-        ).round(2)
-
-        top_20 = stats.sort_values(by="Economy Rate", ascending=True).head(20)
-        top_20.rename(
-            columns={"bowler": "Bowler", "year": "Year"}, inplace=True
-        )
-        st.dataframe(top_20, hide_index=True, use_container_width=True)
-
-    # 4. Overall Economical Bowlers
-    elif "Economical" in bowler_metric:
-        st.subheader("📉 Overall Most Economical Bowlers")
-
-        stats = (
-            filtered_data.groupby(group_cols, observed=True)
-            .agg(
-                Runs_Conceded=("runs_bowler", "sum"),
-                Legal_Balls=("valid_ball", "sum"),
-                Wickets=("bowler_wicket", "sum"),
-                Dot_Balls=("runs_total", lambda x: (x == 0).sum()),
-            )
-            .reset_index()
-        )
-
-        min_balls = 100 if view_mode == "All-Time Top 20" else 60
-        stats = stats[stats["Legal_Balls"] >= min_balls]
-
-        overs_bowled = stats["Legal_Balls"] / 6.0
-        stats["Economy Rate"] = (
-            stats["Runs_Conceded"] / overs_bowled.replace(0, np.nan)
-        ).round(2)
-        stats["Dot Ball %"] = (
-            (stats["Dot_Balls"] / stats["Legal_Balls"].replace(0, np.nan))
-            * 100
-        ).round(2)
-
-        top_20 = stats.sort_values(by="Economy Rate", ascending=True).head(20)
-        top_20.rename(
-            columns={"bowler": "Bowler", "year": "Year"}, inplace=True
-        )
-        st.dataframe(top_20, hide_index=True, use_container_width=True)
+    top_20 = stats.sort_values(by="Economy Rate", ascending=True).head(20)
+    top_20.rename(columns={"bowler": "Bowler", "year": "Year"}, inplace=True)
+    st.dataframe(top_20, hide_index=True, use_container_width=True)
 
 
 # ==============================================================================
 # SECTION 3: WICKETKEEPER-BATTER ANALYTICS
 # ==============================================================================
 with tab_wk:
-    st.header("🧤 Wicketkeeper-Batter Analysis (2008–2026)")
+  st.header("🧤 Wicketkeeper-Batter Analysis")
 
-    ipl_wicketkeepers = {
-        "MS Dhoni",
-        "Dinesh Karthik",
-        "Wriddhiman Saha",
-        "Robin Uthappa",
-        "Parthiv Patel",
-        "Naman Ojha",
-        "Adam Gilchrist",
-        "Kumar Sangakkara",
-        "Brendon McCullum",
-        "Mark Boucher",
-        "AB de Villiers",
-        "Kamran Akmal",
-        "Tatenda Taibu",
-        "Luke Ronchi",
-        "Manvinder Bisla",
-        "CM Gautam",
-        "Aditya Tare",
-        "Eknath Kerkar",
-        "Shreevats Goswami",
-        "Mahesh Rawat",
-        "Pinal Shah",
-        "Yogesh Takawale",
-        "Ambati Rayudu",
-        "Rishabh Pant",
-        "Sanju Samson",
-        "KL Rahul",
-        "Ishan Kishan",
-        "Jitesh Sharma",
-        "Dhruv Jurel",
-        "Prabhsimran Singh",
-        "Anuj Rawat",
-        "Abhishek Porel",
-        "Vishnu Vinod",
-        "KS Bharat",
-        "Kumar Kushagra",
-        "Robin Minz",
-        "Aryan Juyal",
-        "Kunal Rathore",
-        "Luvnith Sisodia",
-        "Sheldon Jackson",
-        "Baba Indrajith",
-        "Upendra Yadav",
-        "Urvil Patel",
-        "Vansh Bedi",
-        "Shrijith Krishnan",
-        "Jos Buttler",
-        "Quinton de Kock",
-        "Nicholas Pooran",
-        "Heinrich Klaasen",
-        "Phil Salt",
-        "Tristan Stubbs",
-        "Devon Conway",
-        "Rahmanullah Gurbaz",
-        "Josh Inglis",
-        "Ryan Rickelton",
-        "Shai Hope",
-        "Donovan Ferreira",
-        "Matthew Wade",
-        "Tim Seifert",
-        "Sam Billings",
-        "Alex Carey",
-        "Ben McDermott",
-        "Glenn Phillips",
-        "Peter Handscomb",
-        "Finn Allen",
-    }
+  ipl_wicketkeepers = {
+      "MS Dhoni",
+      "Dinesh Karthik",
+      "Wriddhiman Saha",
+      "Robin Uthappa",
+      "Parthiv Patel",
+      "Naman Ojha",
+      "Adam Gilchrist",
+      "Kumar Sangakkara",
+      "Brendon McCullum",
+      "Mark Boucher",
+      "AB de Villiers",
+      "Kamran Akmal",
+      "Tatenda Taibu",
+      "Luke Ronchi",
+      "Manvinder Bisla",
+      "CM Gautam",
+      "Aditya Tare",
+      "Eknath Kerkar",
+      "Shreevats Goswami",
+      "Mahesh Rawat",
+      "Pinal Shah",
+      "Yogesh Takawale",
+      "Ambati Rayudu",
+      "Rishabh Pant",
+      "Sanju Samson",
+      "KL Rahul",
+      "Ishan Kishan",
+      "Jitesh Sharma",
+      "Dhruv Jurel",
+      "Prabhsimran Singh",
+      "Anuj Rawat",
+      "Abhishek Porel",
+      "Vishnu Vinod",
+      "KS Bharat",
+      "Kumar Kushagra",
+      "Robin Minz",
+      "Aryan Juyal",
+      "Kunal Rathore",
+      "Luvnith Sisodia",
+      "Sheldon Jackson",
+      "Baba Indrajith",
+      "Upendra Yadav",
+      "Urvil Patel",
+      "Vansh Bedi",
+      "Shrijith Krishnan",
+      "Jos Buttler",
+      "Quinton de Kock",
+      "Nicholas Pooran",
+      "Heinrich Klaasen",
+      "Phil Salt",
+      "Tristan Stubbs",
+      "Devon Conway",
+      "Rahmanullah Gurbaz",
+      "Josh Inglis",
+      "Ryan Rickelton",
+      "Shai Hope",
+      "Donovan Ferreira",
+      "Matthew Wade",
+      "Tim Seifert",
+      "Sam Billings",
+      "Alex Carey",
+      "Ben McDermott",
+      "Glenn Phillips",
+      "Peter Handscomb",
+      "Finn Allen",
+  }
 
-    selected_position = st.slider(
-        "Filter Batting Position Range (e.g., Positions 1 to 8)",
-        min_value=1,
-        max_value=8,
-        value=(1, 8),
-    )
+  selected_position = st.slider(
+      "Filter Batting Position Range (e.g., Positions 1 to 8)",
+      min_value=1,
+      max_value=8,
+      value=(1, 8),
+  )
 
-    group_cols = ["batter"] if view_mode == "All-Time Top 20" else ["year", "batter"]
+  df_wk = ball2ball_data[
+      (ball2ball_data["batter"].isin(ipl_wicketkeepers))
+      & (ball2ball_data["bat_pos"] >= selected_position[0])
+      & (ball2ball_data["bat_pos"] <= selected_position[1])
+  ].copy()
 
-    # Filter dataframe safely without copying whole memory arrays
-    df_wk = filtered_data[
-        (filtered_data["batter"].isin(ipl_wicketkeepers))
-        & (filtered_data["bat_pos"] >= selected_position[0])
-        & (filtered_data["bat_pos"] <= selected_position[1])
-    ]
+  if view_mode == "Year-Wise Top 20":
+    df_wk = df_wk[df_wk["year"] == selected_year]
 
-    wk_stats = (
-        df_wk.groupby(group_cols, observed=True)
-        .agg(
-            Runs=("runs_batter", "sum"),
-            Balls_Faced=("valid_ball", "sum"),
-            Avg_Batting_Pos=("bat_pos", "mean"),
-            Fours=("runs_batter", lambda x: (x == 4).sum()),
-            Sixes=("runs_batter", lambda x: (x == 6).sum()),
-            Dismissals=(
-                "player_out",
-                lambda x: (x.notna() & (x != "") & (x != 0)).sum(),
-            ),
-        )
-        .reset_index()
-    )
+  group_cols = ["batter"] if view_mode == "All-Time Top 20" else ["year", "batter"]
 
-    min_balls = 30 if view_mode == "All-Time Top 20" else 15
-    wk_stats = wk_stats[wk_stats["Balls_Faced"] >= min_balls]
+  wk_stats = (
+      df_wk.groupby(group_cols)
+      .agg(
+          Runs=("runs_batter", "sum"),
+          Balls_Faced=("valid_ball", "sum"),
+          Avg_Batting_Pos=("bat_pos", lambda x: round(x.mean())),
+          Fours=("runs_batter", lambda x: (x == 4).sum()),
+          Sixes=("runs_batter", lambda x: (x == 6).sum()),
+          Dismissals=("player_out", "count"),
+      )
+      .reset_index()
+  )
 
-    wk_stats["Strike Rate"] = (
-        (wk_stats["Runs"] / wk_stats["Balls_Faced"].replace(0, np.nan)) * 100
-    ).round(2)
-    wk_stats["Average"] = (
-        wk_stats["Runs"] / wk_stats["Dismissals"].replace(0, 1)
-    ).round(2)
-    wk_stats["Avg_Batting_Pos"] = wk_stats["Avg_Batting_Pos"].round(1)
+  min_balls = 30 if view_mode == "All-Time Top 20" else 15
+  wk_stats = wk_stats[wk_stats["Balls_Faced"] >= min_balls]
 
-    top_20 = wk_stats.sort_values(
-        by=["Runs", "Strike Rate"], ascending=[False, False]
-    ).head(20)
-    top_20.rename(
-        columns={
-            "batter": "Wicketkeeper",
-            "year": "Year",
-            "Avg_Batting_Pos": "Avg Pos",
-        },
-        inplace=True,
-    )
+  wk_stats["Strike Rate"] = (
+      (wk_stats["Runs"] / wk_stats["Balls_Faced"]) * 100
+  ).round(2)
+  wk_stats["Average"] = (
+      wk_stats["Runs"] / wk_stats["Dismissals"].replace(0, 1)
+  ).round(2)
+  wk_stats["Avg_Batting_Pos"] = wk_stats["Avg_Batting_Pos"].round(1)
 
-    st.subheader(
-        f"Top Wicketkeepers (Batting Positions {selected_position[0]}–{selected_position[1]})"
-    )
-    st.dataframe(top_20, hide_index=True, use_container_width=True)
+  top_20 = wk_stats.sort_values(
+      by=["Runs", "Strike Rate"], ascending=[False, False]
+  ).head(20)
+  top_20.rename(
+      columns={
+          "batter": "Wicketkeeper",
+          "year": "Year",
+          "Avg_Batting_Pos": "Avg Pos",
+      },
+      inplace=True,
+  )
 
+  st.subheader(
+      f"Top Wicketkeepers (Batting Positions {selected_position[0]}–{selected_position[1]})"
+  )
+  st.dataframe(top_20, hide_index=True, use_container_width=True)
 -------------------------------------------------------------------------------------------------------------------------------------
 
 # ==========================================
