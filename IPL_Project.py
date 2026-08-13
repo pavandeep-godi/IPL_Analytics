@@ -42,7 +42,7 @@ st.title(
 ball2ball_data=pd.read_csv("ball2ball_df.csv")
 
 
-st.title("For the below analytics, use the settings in the lef side of the page")
+st.markdown("For the below analytics, use the settings in the lef side of the page")
 
 
 st.set_page_config(page_title="IPL Auction Intelligence Hub", layout="wide")
