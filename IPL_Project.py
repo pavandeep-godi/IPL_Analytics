@@ -34,7 +34,6 @@ image = Image.open("IPL_LOGO.jpg")
 st.image(image)
 
 st.title(
-    "The Indian Premier League (IPL) is a high-energy Twenty20 cricket tournament played in India. " \
     "Welcome to your all-in-one, single-page solution for deep-dive IPL auction analytics, player performance breakdowns, and strategic insights. Whether you are analyzing all-round impact or evaluating fielding metrics, this interactive platform delivers everything you need at a glance."
 )
 
