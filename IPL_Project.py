@@ -847,7 +847,7 @@ if not chase_data.empty:
 
     # Qualification Threshold: Minimum 100 balls faced for All-Time mode
     # (Adjusted to 30 for Year-Wise mode to account for shorter single-season sample sizes)
-    min_balls_chase = 100 if ("view_mode" in locals() and view_mode == "All-Time Top 20") else 30
+    min_balls_chase = 100 if ("view_mode" in locals() and view_mode == "All-Time Top 20") else 50
     chase_summary = chase_summary[chase_summary["Chase_Balls"] >= min_balls_chase].copy()
 
     if not chase_summary.empty:
