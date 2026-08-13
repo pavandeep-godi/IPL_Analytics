@@ -803,3 +803,54 @@ if not fielding_data.empty:
 
 else:
     st.info("No fielding data available for the selected view mode / season.")
+
+# Filter for second innings where target is defined
+chase_df = ball2ball_data[
+    (ball2ball_data["innings"] == 2) & 
+    (ball2ball_data["runs_target"].notna())
+].copy()
+
+# Calculate Chase Stats per Batter
+chase_pressure_index = (
+    chase_df.groupby("batter")
+    .agg(
+        Innings_Chased=("match_id", "nunique"),
+        Chase_Runs=("runs_batter", "sum"),
+        Chase_Balls=("valid_ball", "sum"),
+        Chase_Dismissals=("player_out", "count"),
+        Fours=("runs_batter", lambda x: (x == 4).sum()),
+        Sixes=("runs_batter", lambda x: (x == 6).sum()),
+        High_Target_Runs=(
+            "runs_batter",
+            lambda x: x[chase_df.loc[x.index, "runs_target"] >= 180].sum(),
+        ),  # Runs scored when chasing 180+
+    )
+    .reset_index()
+)
+
+# Apply Minimum Sample Filter (e.g., at least 50 balls faced while chasing)
+chase_pressure_index = chase_pressure_index[chase_pressure_index["Chase_Balls"] >= 50].copy()
+
+# Derived Metrics
+chase_pressure_index["Chase_SR"] = (
+    (chase_pressure_index["Chase_Runs"] / chase_pressure_index["Chase_Balls"]) * 100
+).round(2)
+
+chase_pressure_index["Chase_Avg"] = (
+    chase_pressure_index["Chase_Runs"] / chase_pressure_index["Chase_Dismissals"].replace(0, 1)
+).round(2)
+
+chase_pressure_index["Boundary_%"] = (
+    ((chase_pressure_index["Fours"] * 4 + chase_pressure_index["Sixes"] * 6) / chase_pressure_index["Chase_Runs"]) * 100
+).round(2)
+
+# Composite "Chase Pressure Score" (Weighted Combination of SR, Avg, and Performance in High Targets)
+chase_pressure_index["Chase_Pressure_Index"] = (
+    (chase_pressure_index["Chase_SR"] * 0.5) + 
+    (chase_pressure_index["Chase_Avg"] * 0.3) + 
+    ((chase_pressure_index["High_Target_Runs"] / chase_pressure_index["Chase_Runs"]) * 20)
+).round(2)
+
+# Display Top Chasers
+top_chasers = chase_pressure_index.sort_values(by="Chase_Pressure_Index", ascending=False)
+print(top_chasers[["batter", "Innings_Chased", "Chase_Runs", "Chase_SR", "Chase_Avg", "Chase_Pressure_Index"]].head(10))
