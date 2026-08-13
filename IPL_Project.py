@@ -533,7 +533,6 @@ with tab_wk:
       f"Top Wicketkeepers (Batting Positions {selected_position[0]}–{selected_position[1]})"
   )
   st.dataframe(top_20, hide_index=True, use_container_width=True)
--------------------------------------------------------------------------------------------------------------------------------------
 
 # ==========================================
 # HELPER: Modern Horizontal Progress Bar
