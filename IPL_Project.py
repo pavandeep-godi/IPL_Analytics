@@ -78,7 +78,7 @@ def load_ball_data(file_path: str) -> pd.DataFrame:
     return df
 
 # Load base dataset (Loaded ONCE across all user interactions)
-ball2ball_data = load_ball_data("ball2ball_df.csv")sv")
+ball2ball_data = load_ball_data("ball2ball_df.csv")
 
 
 st.markdown("For the below analytics, use the settings in the lef side of the page")
