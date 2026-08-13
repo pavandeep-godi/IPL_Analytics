@@ -132,10 +132,7 @@ with tab_batting:
             Balls_Faced=("valid_ball", "sum"),
             Fours=("runs_batter", lambda x: (x == 4).sum()),
             Sixes=("runs_batter", lambda x: (x == 6).sum()),
-            Dismissals=(
-                "player_out",
-                lambda x: (x.notna()).sum() if "player_out" in x else 0,
-            ),
+            Dismissals=("player_out", lambda x: x.notna().sum()),
         )
         .reset_index()
     )
