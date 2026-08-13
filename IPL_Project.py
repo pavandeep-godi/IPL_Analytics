@@ -847,7 +847,7 @@ if not chase_data.empty:
 
     # Qualification Threshold: Minimum 100 balls faced for All-Time mode
     # (Adjusted to 30 for Year-Wise mode to account for shorter single-season sample sizes)
-    min_balls_chase = 100 if ("view_mode" in locals() and view_mode == "All-Time Top 20") else 50
+    min_balls_chase = 100 if ("view_mode" in locals() and view_mode == "All-Time Top 20") else 30
     chase_summary = chase_summary[chase_summary["Chase_Balls"] >= min_balls_chase].copy()
 
     if not chase_summary.empty:
@@ -933,56 +933,54 @@ if not chase_data.empty:
         st.markdown("<br>", unsafe_allow_html=True)
 
         # ----------------------------------------------------
-        # Step 4: Interactive Plotly Horizontal Bar Chart
+        # Step 4: Clean & Intuitive CPI Leaderboard Chart
         # ----------------------------------------------------
-        st.markdown("### 📊 Chase Pressure Score & Target Run Contribution")
+        st.markdown("### 📊 Chase Pressure Index (CPI) Leaderboard")
 
-        chart_chase_df = top_chasers_df.iloc[::-1]
+        # Reverse dataframe order for top-to-bottom bar chart display
+        chart_chase_df = top_chasers_df.iloc[::-1].copy()
 
+        # Build clean horizontal bar chart with color gradient
         fig_chase = go.Figure()
 
-        # Regular Chase Runs
         fig_chase.add_trace(go.Bar(
             y=chart_chase_df['batter'],
-            x=chart_chase_df['Chase_Runs'] - chart_chase_df['High_Target_Runs'],
-            name='Standard Chase Runs (<180)',
+            x=chart_chase_df['Chase_Pressure_Index'],
             orientation='h',
-            marker=dict(color='#3B82F6', cornerradius=4),
-            text=chart_chase_df['Chase_Runs'] - chart_chase_df['High_Target_Runs'],
-            textposition='inside',
-            insidetextanchor='middle',
-            textfont=dict(color='white', size=12, family='sans-serif')
+            marker=dict(
+                color=chart_chase_df['Chase_Pressure_Index'],
+                colorscale='Emrld',  # Clean green gradient
+                showscale=False,
+                cornerradius=4
+            ),
+            # Display formatted CPI score on each bar
+            text=[f"  <b>{val:.1f} CPI</b>" for val in chart_chase_df['Chase_Pressure_Index']],
+            textposition='outside',
+            textfont=dict(size=13, color='#0F766E', family='sans-serif'),
+            # Custom Hover Tooltip Template
+            customdata=chart_chase_df[['Chase_Runs', 'Chase_SR', 'Chase_Avg', 'High_Target_Runs', 'Innings_Chased']].values,
+            hovertemplate=(
+                "<b>%{y}</b><br><br>" +
+                "🎯 <b>CPI Score:</b> %{x:.1f}<br>" +
+                "🏏 <b>Chase Runs:</b> %{customdata[0]} (%{customdata[4]} Innings)<br>" +
+                "⚡ <b>Strike Rate:</b> %{customdata[1]:.2f}<br>" +
+                "📊 <b>Average:</b> %{customdata[2]:.2f}<br>" +
+                "🔥 <b>Runs in 180+ Chases:</b> %{customdata[3]}<extra></extra>"
+            )
         ))
 
-        # High Target Chase Runs (>=180)
-        fig_chase.add_trace(go.Bar(
-            y=chart_chase_df['batter'],
-            x=chart_chase_df['High_Target_Runs'],
-            name='High Target Runs (180+ Target)',
-            orientation='h',
-            marker=dict(color='#10B981', cornerradius=4),
-            text=chart_chase_df['High_Target_Runs'],
-            textposition='inside',
-            insidetextanchor='middle',
-            textfont=dict(color='white', size=12, family='sans-serif')
-        ))
+        # Add margin to x-axis max so text labels aren't cut off
+        max_cpi = chart_chase_df['Chase_Pressure_Index'].max()
 
         fig_chase.update_layout(
-            barmode='stack',
-            height=max(350, top_n_chase * 32),
-            margin=dict(l=20, r=20, t=20, b=30),
-            legend=dict(
-                orientation='h',
-                yanchor='bottom',
-                y=1.02,
-                xanchor='right',
-                x=1
-            ),
+            height=max(360, top_n_chase * 36),
+            margin=dict(l=20, r=60, t=20, b=30),
             xaxis=dict(
-                title='Total Runs Scored while Chasing',
+                title='Chase Pressure Index Score',
                 showgrid=True,
                 gridcolor='#F3F4F6',
-                zeroline=False
+                zeroline=False,
+                range=[0, max_cpi * 1.18]  # Extra headroom for labels
             ),
             yaxis=dict(
                 showgrid=False,
