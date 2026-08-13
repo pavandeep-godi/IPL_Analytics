@@ -804,53 +804,220 @@ if not fielding_data.empty:
 else:
     st.info("No fielding data available for the selected view mode / season.")
 
-# Filter for second innings where target is defined
-chase_df = ball2ball_data[
-    (ball2ball_data["innings"] == 2) & 
-    (ball2ball_data["runs_target"].notna())
+# ==========================================
+# CHASE PRESSURE INDEX SECTION (Filter-Aware)
+# ==========================================
+st.markdown("---")
+st.title("🎯 Chase Pressure Index (CPI)")
+
+# ----------------------------------------------------
+# Step 0: Apply View Mode Filter (All-Time vs Year-Wise)
+# ----------------------------------------------------
+df_chase = ball2ball_data.copy()
+if "view_mode" in locals() and view_mode == "Year-Wise Top 20":
+    df_chase = df_chase[df_chase["year"] == selected_year]
+
+# Filter strictly for 2nd innings with a defined target
+chase_data = df_chase[
+    (df_chase["innings"] == 2) & 
+    (df_chase["runs_target"].notna())
 ].copy()
 
-# Calculate Chase Stats per Batter
-chase_pressure_index = (
-    chase_df.groupby("batter")
-    .agg(
-        Innings_Chased=("match_id", "nunique"),
-        Chase_Runs=("runs_batter", "sum"),
-        Chase_Balls=("valid_ball", "sum"),
-        Chase_Dismissals=("player_out", "count"),
-        Fours=("runs_batter", lambda x: (x == 4).sum()),
-        Sixes=("runs_batter", lambda x: (x == 6).sum()),
-        High_Target_Runs=(
-            "runs_batter",
-            lambda x: x[chase_df.loc[x.index, "runs_target"] >= 180].sum(),
-        ),  # Runs scored when chasing 180+
+if not chase_data.empty:
+
+    # ----------------------------------------------------
+    # Step 1: Calculate Chase Stats per Batter
+    # ----------------------------------------------------
+    chase_summary = (
+        chase_data.groupby("batter")
+        .agg(
+            Innings_Chased=("match_id", "nunique"),
+            Chase_Runs=("runs_batter", "sum"),
+            Chase_Balls=("valid_ball", "sum"),
+            Chase_Dismissals=("player_out", "count"),
+            Fours=("runs_batter", lambda x: (x == 4).sum()),
+            Sixes=("runs_batter", lambda x: (x == 6).sum()),
+            High_Target_Runs=(
+                "runs_batter",
+                lambda x: x[chase_data.loc[x.index, "runs_target"] >= 180].sum(),
+            ),
+        )
+        .reset_index()
     )
-    .reset_index()
-)
 
-# Apply Minimum Sample Filter (e.g., at least 50 balls faced while chasing)
-chase_pressure_index = chase_pressure_index[chase_pressure_index["Chase_Balls"] >= 50].copy()
+    # Dynamic minimum balls threshold based on view_mode
+    min_balls_chase = 50 if ("view_mode" in locals() and view_mode == "All-Time Top 20") else 20
+    chase_summary = chase_summary[chase_summary["Chase_Balls"] >= min_balls_chase].copy()
 
-# Derived Metrics
-chase_pressure_index["Chase_SR"] = (
-    (chase_pressure_index["Chase_Runs"] / chase_pressure_index["Chase_Balls"]) * 100
-).round(2)
+    if not chase_summary.empty:
 
-chase_pressure_index["Chase_Avg"] = (
-    chase_pressure_index["Chase_Runs"] / chase_pressure_index["Chase_Dismissals"].replace(0, 1)
-).round(2)
+        # Derived Performance Metrics
+        chase_summary["Chase_SR"] = (
+            (chase_summary["Chase_Runs"] / chase_summary["Chase_Balls"]) * 100
+        ).round(2)
 
-chase_pressure_index["Boundary_%"] = (
-    ((chase_pressure_index["Fours"] * 4 + chase_pressure_index["Sixes"] * 6) / chase_pressure_index["Chase_Runs"]) * 100
-).round(2)
+        chase_summary["Chase_Avg"] = (
+            chase_summary["Chase_Runs"] / chase_summary["Chase_Dismissals"].replace(0, 1)
+        ).round(2)
 
-# Composite "Chase Pressure Score" (Weighted Combination of SR, Avg, and Performance in High Targets)
-chase_pressure_index["Chase_Pressure_Index"] = (
-    (chase_pressure_index["Chase_SR"] * 0.5) + 
-    (chase_pressure_index["Chase_Avg"] * 0.3) + 
-    ((chase_pressure_index["High_Target_Runs"] / chase_pressure_index["Chase_Runs"]) * 20)
-).round(2)
+        chase_summary["Boundary_%"] = (
+            ((chase_summary["Fours"] * 4 + chase_summary["Sixes"] * 6) / chase_summary["Chase_Runs"].replace(0, 1)) * 100
+        ).round(2)
 
-# Display Top Chasers
-top_chasers = chase_pressure_index.sort_values(by="Chase_Pressure_Index", ascending=False)
-print(top_chasers[["batter", "Innings_Chased", "Chase_Runs", "Chase_SR", "Chase_Avg", "Chase_Pressure_Index"]].head(10))
+        # Composite Chase Pressure Index Score
+        chase_summary["Chase_Pressure_Index"] = (
+            (chase_summary["Chase_SR"] * 0.5) + 
+            (chase_summary["Chase_Avg"] * 0.3) + 
+            ((chase_summary["High_Target_Runs"] / chase_summary["Chase_Runs"].replace(0, 1)) * 20)
+        ).round(1)
+
+        # Sort descending by Chase Pressure Index
+        chase_summary = chase_summary.sort_values(by="Chase_Pressure_Index", ascending=False).reset_index(drop=True)
+        chase_summary["Rank"] = chase_summary.index + 1
+
+        # ----------------------------------------------------
+        # Step 2: User Controls (Top N Slider)
+        # ----------------------------------------------------
+        max_available_chasers = len(chase_summary)
+        slider_max_c = min(25, max_available_chasers)
+        slider_min_c = min(5, max_available_chasers)
+
+        col_c1, col_c2 = st.columns([1, 2])
+        with col_c1:
+            top_n_chase = st.slider(
+                "Select Top Chasers to Display",
+                min_value=slider_min_c,
+                max_value=slider_max_c,
+                value=min(10, slider_max_c),
+                step=5,
+                key="chase_top_n_slider"
+            )
+
+        top_chasers_df = chase_summary.head(top_n_chase).copy()
+
+        # ----------------------------------------------------
+        # Step 3: Top 3 Winner Podium Cards
+        # ----------------------------------------------------
+        st.markdown("### 🏆 Top Chase Master Performers")
+
+        podium_cols_c = st.columns(min(3, len(top_chasers_df)))
+        medals_c = ["🥇 1st Place", "🥈 2nd Place", "🥉 3rd Place"]
+        border_colors_c = ["#FFD700", "#C0C0C0", "#CD7F32"]
+
+        for idx in range(min(3, len(top_chasers_df))):
+            row = top_chasers_df.iloc[idx]
+            with podium_cols_c[idx]:
+                st.markdown(
+                    f"""
+                    <div style="
+                        background-color: #FFFFFF;
+                        border: 1px solid #E5E7EB;
+                        border-top: 5px solid {border_colors_c[idx]};
+                        border-radius: 10px;
+                        padding: 16px;
+                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+                        text-align: center;
+                    ">
+                        <span style="font-size: 13px; font-weight: 700; color: #6B7280; text-transform: uppercase;">{medals_c[idx]}</span>
+                        <h3 style="margin: 6px 0 2px 0; font-size: 20px; color: #111827;">{row['batter']}</h3>
+                        <div style="font-size: 28px; font-weight: 800; color: #16A34A;">{row['Chase_Pressure_Index']} <span style="font-size: 13px; font-weight: 500; color: #6B7280;">CPI</span></div>
+                        <div style="margin-top: 8px; font-size: 12px; color: #4B5563;">
+                            🏏 <b>{row['Chase_Runs']}</b> Runs &nbsp;|&nbsp; ⚡ <b>{row['Chase_SR']}</b> SR &nbsp;|&nbsp; 📊 <b>{row['Chase_Avg']}</b> Avg
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ----------------------------------------------------
+        # Step 4: Interactive Plotly Horizontal Bar Chart
+        # ----------------------------------------------------
+        st.markdown("### 📊 Chase Pressure Score & Target Run Contribution")
+
+        chart_chase_df = top_chasers_df.iloc[::-1]
+
+        fig_chase = go.Figure()
+
+        # Regular Chase Runs
+        fig_chase.add_trace(go.Bar(
+            y=chart_chase_df['batter'],
+            x=chart_chase_df['Chase_Runs'] - chart_chase_df['High_Target_Runs'],
+            name='Standard Chase Runs (<180)',
+            orientation='h',
+            marker=dict(color='#3B82F6', cornerradius=4),
+            text=chart_chase_df['Chase_Runs'] - chart_chase_df['High_Target_Runs'],
+            textposition='inside',
+            insidetextanchor='middle',
+            textfont=dict(color='white', size=12, family='sans-serif')
+        ))
+
+        # High Target Chase Runs (>=180)
+        fig_chase.add_trace(go.Bar(
+            y=chart_chase_df['batter'],
+            x=chart_chase_df['High_Target_Runs'],
+            name='High Target Runs (180+ Target)',
+            orientation='h',
+            marker=dict(color='#10B981', cornerradius=4),
+            text=chart_chase_df['High_Target_Runs'],
+            textposition='inside',
+            insidetextanchor='middle',
+            textfont=dict(color='white', size=12, family='sans-serif')
+        ))
+
+        fig_chase.update_layout(
+            barmode='stack',
+            height=max(350, top_n_chase * 32),
+            margin=dict(l=20, r=20, t=20, b=30),
+            legend=dict(
+                orientation='h',
+                yanchor='bottom',
+                y=1.02,
+                xanchor='right',
+                x=1
+            ),
+            xaxis=dict(
+                title='Total Runs Scored while Chasing',
+                showgrid=True,
+                gridcolor='#F3F4F6',
+                zeroline=False
+            ),
+            yaxis=dict(
+                showgrid=False,
+                tickfont=dict(size=13, color='#111827', weight='bold')
+            ),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+
+        st.plotly_chart(fig_chase, use_container_width=True)
+
+        # ----------------------------------------------------
+        # Step 5: Leaderboard Table Expander
+        # ----------------------------------------------------
+        with st.expander("📄 View Full Chase Pressure Index Leaderboard Table"):
+            display_chase = chase_summary[[
+                'Rank', 'batter', 'Innings_Chased', 'Chase_Runs', 'Chase_Balls', 
+                'Chase_SR', 'Chase_Avg', 'High_Target_Runs', 'Boundary_%', 'Chase_Pressure_Index'
+            ]].rename(columns={
+                'batter': 'Batter Name',
+                'Innings_Chased': 'Innings Chased',
+                'Chase_Runs': 'Chase Runs',
+                'Chase_Balls': 'Balls Faced',
+                'Chase_SR': 'Strike Rate',
+                'Chase_Avg': 'Average',
+                'High_Target_Runs': 'Runs in 180+ Targets',
+                'Boundary_%': 'Boundary %',
+                'Chase_Pressure_Index': 'Chase Pressure Index (CPI)'
+            })
+
+            st.dataframe(
+                display_chase,
+                use_container_width=True,
+                hide_index=True
+            )
+    else:
+        st.info("No batters met the minimum qualification ball threshold for the selected filters.")
+else:
+    st.info("No chase data available for the selected view mode / season.")
