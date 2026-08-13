@@ -28,17 +28,38 @@ def custom_plotly_chart(fig, *args, **kwargs):
 st.plotly_chart = custom_plotly_chart
 
 
-# 1. Sidebar Logo & Branding
-with st.sidebar:
-    image = Image.open("IPL_LOGO.jpg")
-    st.image(image, use_container_width=True)
-    st.markdown("<h3 style='text-align: center; color: #1E3A8A;'>IPL Analytics Portal</h3>", unsafe_allow_html=True)
-    st.markdown("---")
+import base64
+import streamlit as st
 
-# 2. Main Page Hero Title
-st.title("⚡ IPL Auction Analytics Hub")
-st.caption("🔍 Deep-dive into player metrics, venue specializations, and chase pressure indicators.")
-st.markdown("---")
+# Helper function to convert local image to base64 for HTML embedding
+def get_image_base64(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+logo_b64 = get_image_base64("IPL_LOGO.jpg")
+
+st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 100%);
+        padding: 24px 32px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+        margin-bottom: 25px;
+    ">
+        <img src="data:image/jpeg;base64,{logo_b64}" style="width: 85px; height: 85px; border-radius: 12px; object-fit: cover; border: 2px solid rgba(255,255,255,0.2);">
+        <div>
+            <h1 style="color: #FFFFFF; margin: 0; font-size: 2.3rem; font-weight: 800; letter-spacing: -0.5px;">
+                IPL Auction Analytics Hub
+            </h1>
+            <p style="color: #94A3B8; margin: 6px 0 0 0; font-size: 1rem; font-weight: 400;">
+                Advanced Metrics • Venue Insights • Player Valuation & Chase Pressure Indexes
+            </p>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
 
 ball2ball_data=pd.read_csv("ball2ball_df.csv")
