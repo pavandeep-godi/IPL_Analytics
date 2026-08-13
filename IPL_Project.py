@@ -531,6 +531,11 @@ with tab_wk:
   )
   st.dataframe(top_20, hide_index=True, use_container_width=True)
 
+import gc
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+
 
 # ==========================================
 # HELPER: Modern Horizontal Progress Bar
@@ -589,36 +594,37 @@ def create_modern_progress_bar(value, target, label, color):
 
 
 # ==========================================
-# ALL-ROUNDERS SECTION (Filter-Aware)
+# ALL-ROUNDERS SECTION (Memory Optimized)
 # ==========================================
 st.markdown("---")
 st.title("⚡ Top All-Rounders Performance")
 
-# Pre-calculate batter's valid ball flag on main df if not present
+# Pre-calculate batter's valid ball flag (In-place bit manipulation to save RAM)
 if "batter_ball" not in ball2ball_data.columns:
   if "wide" in ball2ball_data.columns:
-    ball2ball_data["batter_ball"] = (ball2ball_data["wide"] == 0).astype(int)
+    ball2ball_data["batter_ball"] = (ball2ball_data["wide"] == 0).astype("int8")
   elif "extra_type" in ball2ball_data.columns:
     ball2ball_data["batter_ball"] = (
         ball2ball_data["extra_type"] != "wides"
-    ).astype(int)
+    ).astype("int8")
   else:
     ball2ball_data["batter_ball"] = 1
 
 # ----------------------------------------------------
-# Step 0: Apply View Mode Filter (All-Time vs Year-Wise)
+# Step 0: Apply View Mode Filter
 # ----------------------------------------------------
-df_allround = ball2ball_data.copy()
-if "view_mode" in locals() and view_mode == "Year-Wise Top 20":
-  df_allround = df_allround[df_allround["year"] == selected_year]
-
-# Dynamic thresholds based on view mode
 is_year_wise = "view_mode" in locals() and view_mode == "Year-Wise Top 20"
+
+if is_year_wise:
+  df_allround = ball2ball_data[ball2ball_data["year"] == selected_year]
+else:
+  df_allround = ball2ball_data  # Avoid full copy in memory
+
 MIN_RUNS = 15 if is_year_wise else 50
 MIN_WICKETS = 2 if is_year_wise else 5
 
 # ----------------------------------------------------
-# Step 1: Filter Dataset to Find Qualified All-Rounders
+# Step 1: Filter Qualified All-Rounders (Memory projection)
 # ----------------------------------------------------
 batting_totals = df_allround.groupby("batter")["runs_batter"].sum()
 bowling_totals = df_allround.groupby("bowler")["bowler_wicket"].sum()
@@ -633,7 +639,6 @@ allrounders_options = sorted(
 if not allrounders_options:
   st.info("No all-rounders met the threshold for the currently selected filter.")
 else:
-  # Selectbox showing qualified all-rounders
   selected_allrounder = st.selectbox(
       label=(
           f"Select All-Rounder ({len(allrounders_options)} players qualified)"
@@ -645,26 +650,37 @@ else:
   if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
 
     # ----------------------------------------------------
-    # Step 2: Calculate Match-by-Match Batting Stats
+    # Step 2 & 3: Match-by-Match Stats (Column Selection Projection)
     # ----------------------------------------------------
-    bat_df = df_allround[df_allround["batter"] == selected_allrounder]
+    bat_mask = df_allround["batter"] == selected_allrounder
     batter_matches = (
-        bat_df.groupby("match_id")
+        df_allround.loc[
+            bat_mask,
+            ["match_id", "runs_batter", "batter_ball", "batting_team", "bowling_team"],
+        ]
+        .groupby("match_id", as_index=False)
         .agg(
             runs_scored=("runs_batter", "sum"),
-            balls_faced=("batter_ball", "sum"),  # Fixed: Excludes Wides
+            balls_faced=("batter_ball", "sum"),
             batting_team=("batting_team", "first"),
             bowling_team=("bowling_team", "first"),
         )
-        .reset_index()
     )
 
-    # ----------------------------------------------------
-    # Step 3: Calculate Match-by-Match Bowling Stats
-    # ----------------------------------------------------
-    bowl_df = df_allround[df_allround["bowler"] == selected_allrounder]
+    bowl_mask = df_allround["bowler"] == selected_allrounder
     bowler_matches = (
-        bowl_df.groupby("match_id")
+        df_allround.loc[
+            bowl_mask,
+            [
+                "match_id",
+                "bowler_wicket",
+                "runs_bowler",
+                "valid_ball",
+                "bowling_team",
+                "batting_team",
+            ],
+        ]
+        .groupby("match_id", as_index=False)
         .agg(
             wickets_taken=("bowler_wicket", "sum"),
             runs_conceded=("runs_bowler", "sum"),
@@ -672,7 +688,6 @@ else:
             bowl_batting_team=("bowling_team", "first"),
             bowl_bowling_team=("batting_team", "first"),
         )
-        .reset_index()
     )
 
     # ----------------------------------------------------
@@ -682,7 +697,7 @@ else:
         batter_matches, bowler_matches, on="match_id", how="outer"
     )
 
-    # Fill team names if player only bowled or only batted in a match
+    # Clean team names without allocating unnecessary intermediate DataFrames
     match_perf["batting_team"] = match_perf["batting_team"].fillna(
         match_perf["bowl_batting_team"]
     )
@@ -695,7 +710,7 @@ else:
         errors="ignore",
     )
 
-    # Fill numerical missing values with 0
+    # Memory downcasting for numeric metrics
     numeric_cols = [
         "runs_scored",
         "balls_faced",
@@ -703,37 +718,40 @@ else:
         "runs_conceded",
         "balls_bowled",
     ]
-    match_perf[numeric_cols] = match_perf[numeric_cols].fillna(0).astype(int)
+    for col in numeric_cols:
+      match_perf[col] = match_perf[col].fillna(0).astype("int16")
 
-    # Attach 'year' if available in original dataset
     if "year" in df_allround.columns:
       match_year_map = (
           df_allround[["match_id", "year"]]
           .drop_duplicates()
           .set_index("match_id")["year"]
       )
-      match_perf["year"] = match_perf["match_id"].map(match_year_map)
+      match_perf["year"] = (
+          match_perf["match_id"].map(match_year_map).astype("int16")
+      )
+
+    # Clear intermediate data from RAM
+    del batter_matches, bowler_matches
+    gc.collect()
 
     # ----------------------------------------------------
-    # Step 5: Categorize the 3 Contribution Types
+    # Step 5: Categorize Contribution Types
     # ----------------------------------------------------
-    dual_impact_df = match_perf[
-        (match_perf["runs_scored"] >= 20) & (match_perf["wickets_taken"] >= 1)
-    ].copy()
+    dual_mask = (match_perf["runs_scored"] >= 20) & (
+        match_perf["wickets_taken"] >= 1
+    )
+    dual_impact_df = match_perf[dual_mask]
     dual_impact_count = len(dual_impact_df)
 
-    batting_impact_df = match_perf[match_perf["runs_scored"] >= 30]
-    batting_impact_count = len(batting_impact_df)
+    batting_impact_count = (match_perf["runs_scored"] >= 30).sum()
+    bowling_impact_count = (match_perf["wickets_taken"] >= 2).sum()
 
-    bowling_impact_df = match_perf[match_perf["wickets_taken"] >= 2]
-    bowling_impact_count = len(bowling_impact_df)
-
-    # Career / Selected Scope Totals
     total_runs = int(match_perf["runs_scored"].sum())
     total_wickets = int(match_perf["wickets_taken"].sum())
 
     # ----------------------------------------------------
-    # Step 6: High-Level Metric Cards
+    # Step 6 & 7: Metric Cards & Progress Bars
     # ----------------------------------------------------
     col1, col2 = st.columns(2)
     col1.metric("Total Runs", f"{total_runs:,}")
@@ -741,9 +759,6 @@ else:
 
     st.markdown("### 📊 Contribution Impact Breakdown")
 
-    # ----------------------------------------------------
-    # Step 7: Render Modern Horizontal Progress Bars
-    # ----------------------------------------------------
     max_target_dual = 10 if is_year_wise else 25
     max_target_single = 15 if is_year_wise else 40
 
@@ -778,9 +793,6 @@ else:
     # ----------------------------------------------------
     with st.expander("📄 View Dual Impact Match Details"):
       if dual_impact_count > 0:
-        if "year" in dual_impact_df.columns:
-          dual_impact_df["year"] = dual_impact_df["year"].astype(int)
-
         cols_to_display = [
             "batting_team",
             "bowling_team",
@@ -802,15 +814,16 @@ else:
           cols_to_display.insert(0, "year")
           rename_dict["year"] = "Season"
 
-        display_df = dual_impact_df[cols_to_display].rename(columns=rename_dict)
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.dataframe(
+            dual_impact_df[cols_to_display].rename(columns=rename_dict),
+            use_container_width=True,
+            hide_index=True,
+        )
       else:
         st.info(
             "No dual-impact matches found for this player matching the"
             " threshold."
         )
-
-
 
 # ==========================================
 # FIELDING IMPACT SECTION (Filter-Aware)
