@@ -62,14 +62,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-@st.cache_data
-def load_ball_data(file_path: str) -> pd.DataFrame:
-    df = pd.read_csv(file_path)
-
-    return df
-
-# Load base dataset (Loaded ONCE across all user interactions)
-ball2ball_data = load_ball_data("ball2ball_df.csv")
+ball2ball_data=pd.read_csv("ball2ball_df.csv")
 
 
 st.markdown("For the below analytics, use the settings in the lef side of the page")
@@ -82,18 +75,15 @@ st.title("🎯 IPL Auction Intelligence & Scouting Hub")
 tab_batting, tab_bowling, tab_wk = st.tabs(
     ["🏏 Batter Analytics", "⚡ Bowler Analytics", "🧤 WK-Batter Analytics"]
 )
-view_mode = st.sidebar.radio("View Mode", ["All-Time Top 20", "Year-Wise Top 20"])
-selected_year = None
+
 # Shared View Mode Control
-@st.cache_data
-def get_filtered_data(_df: pd.DataFrame, view_mode: str, selected_year: int = None) -> pd.DataFrame:
-    """
-    Subsets the data based on global view mode.
-    The underscore '_df' prevents Streamlit from re-hashing the full DataFrame.
-    """
-    if view_mode == "Year-Wise Top 20" and selected_year is not None:
-        return _df[_df["year"] == selected_year]
-    return _df
+st.sidebar.header("⚙️ Global Controls")
+view_mode = st.sidebar.radio("View Mode", ["All-Time Top 20", "Year-Wise Top 20"])
+
+if view_mode == "Year-Wise Top 20":
+    selected_year = st.sidebar.selectbox(
+        "Select Year", sorted(ball2ball_data["year"].unique(), reverse=True)
+    )
 
 # ==============================================================================
 # SECTION 1: BATTER ANALYTICS
