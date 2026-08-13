@@ -385,7 +385,7 @@ with tab_wk:
         .agg(
             Runs=("runs_batter", "sum"),
             Balls_Faced=("valid_ball", "sum"),
-            Avg_Batting_Pos=("bat_pos", "mean"),
+            Avg_Batting_Pos=("bat_pos", lambda x: round(x.mean())),
             Fours=("runs_batter", lambda x: (x == 4).sum()),
             Sixes=("runs_batter", lambda x: (x == 6).sum()),
             Dismissals=(
