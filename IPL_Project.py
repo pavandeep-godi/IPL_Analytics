@@ -28,12 +28,17 @@ def custom_plotly_chart(fig, *args, **kwargs):
 st.plotly_chart = custom_plotly_chart
 
 
-st.title("IPL Auction Analytics Hub")
+# 1. Sidebar Logo & Branding
+with st.sidebar:
+    image = Image.open("IPL_LOGO.jpg")
+    st.image(image, use_container_width=True)
+    st.markdown("<h3 style='text-align: center; color: #1E3A8A;'>IPL Analytics Portal</h3>", unsafe_allow_html=True)
+    st.markdown("---")
 
-image = Image.open("IPL_LOGO.jpg")
-st.image(image)
-
-st.markdown("Welcome to your all-in-one, single-page solution for deep-dive IPL auction analytics, player performance breakdowns, and strategic insights. Whether you are analyzing all-round impact or evaluating fielding metrics, this interactive platform delivers everything you need at a glance.")
+# 2. Main Page Hero Title
+st.title("⚡ IPL Auction Analytics Hub")
+st.caption("🔍 Deep-dive into player metrics, venue specializations, and chase pressure indicators.")
+st.markdown("---")
 
 
 ball2ball_data=pd.read_csv("ball2ball_df.csv")
