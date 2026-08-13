@@ -845,8 +845,9 @@ if not chase_data.empty:
         .reset_index()
     )
 
-    # Dynamic minimum balls threshold based on view_mode
-    min_balls_chase = 50 if ("view_mode" in locals() and view_mode == "All-Time Top 20") else 20
+    # Qualification Threshold: Minimum 100 balls faced for All-Time mode
+    # (Adjusted to 30 for Year-Wise mode to account for shorter single-season sample sizes)
+    min_balls_chase = 100 if ("view_mode" in locals() and view_mode == "All-Time Top 20") else 30
     chase_summary = chase_summary[chase_summary["Chase_Balls"] >= min_balls_chase].copy()
 
     if not chase_summary.empty:
@@ -1018,6 +1019,6 @@ if not chase_data.empty:
                 hide_index=True
             )
     else:
-        st.info("No batters met the minimum qualification ball threshold for the selected filters.")
+        st.info(f"No batters met the minimum qualification threshold of {min_balls_chase} balls faced while chasing.")
 else:
     st.info("No chase data available for the selected view mode / season.")
