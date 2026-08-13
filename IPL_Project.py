@@ -1028,3 +1028,290 @@ if not chase_data.empty:
         st.info(f"No batters met the minimum qualification threshold of {min_balls_chase} balls faced while chasing.")
 else:
     st.info("No chase data available for the selected view mode / season.")
+
+# ==========================================
+# VENUE SPECIALISTS SECTION (Batter & Bowler)
+# ==========================================
+st.markdown("---")
+st.title("🏟️ Venue Specialists")
+
+# Simple, clean calculation explanation box
+with st.expander("ℹ️ How are Venue Performance Indices calculated?"):
+    st.latex(r"\text{Batter Venue Index} = (\text{Venue SR} \times 0.5) + (\text{Venue Avg} \times 0.5)")
+    st.latex(r"\text{Bowler Venue Index} = \left(\frac{100}{\text{Venue Economy}}\right) \times 0.6 + \left(\frac{100}{\text{Venue Bowling SR}}\right) \times 0.4")
+    st.markdown("""
+    * **🏏 Batters:** Combines scoring speed (**Strike Rate - 50%**) and consistency (**Average - 50%**) at a specific stadium.
+    * **🎯 Bowlers:** Combines run containment (**Economy Rate - 60%**) and wicket-taking frequency (**Bowling SR - 40%**).
+    """)
+
+# ----------------------------------------------------
+# Step 0: Filter Dataset based on View Mode
+# ----------------------------------------------------
+df_venue = ball2ball_data.copy()
+if "view_mode" in locals() and view_mode == "Year-Wise Top 20":
+    df_venue = df_venue[df_venue["year"] == selected_year]
+
+if not df_venue.empty:
+
+    # ----------------------------------------------------
+    # Step 1: Venue Selection & Role Toggle
+    # ----------------------------------------------------
+    top_venues = df_venue["venue"].value_counts().index.tolist()
+
+    col_v1, col_v2 = st.columns([2, 1])
+    with col_v1:
+        selected_venue = st.selectbox(
+            "Select Venue / Stadium",
+            options=top_venues,
+            key="venue_select_box"
+        )
+    with col_v2:
+        specialist_role = st.radio(
+            "Select Category",
+            options=["Batting Specialists", "Bowling Specialists"],
+            horizontal=True,
+            key="venue_role_radio"
+        )
+
+    # Filter data for selected venue
+    v_data = df_venue[df_venue["venue"] == selected_venue].copy()
+
+    # Dynamic qualification thresholds (All-Time vs Single Year)
+    is_all_time = ("view_mode" in locals() and view_mode == "All-Time Top 20")
+    min_balls_bat = 60 if is_all_time else 20
+    min_balls_bowl = 60 if is_all_time else 24
+
+    # ====================================================
+    # BATTING VENUE SPECIALISTS
+    # ====================================================
+    if specialist_role == "Batting Specialists":
+        bat_summary = (
+            v_data.groupby("batter")
+            .agg(
+                Innings=("match_id", "nunique"),
+                Runs=("runs_batter", "sum"),
+                Balls=("valid_ball", "sum"),
+                Dismissals=("player_out", "count"),
+                Fours=("runs_batter", lambda x: (x == 4).sum()),
+                Sixes=("runs_batter", lambda x: (x == 6).sum()),
+            )
+            .reset_index()
+        )
+
+        # Filter by qualification threshold
+        bat_summary = bat_summary[bat_summary["Balls"] >= min_balls_bat].copy()
+
+        if not bat_summary.empty:
+            bat_summary["SR"] = ((bat_summary["Runs"] / bat_summary["Balls"]) * 100).round(2)
+            bat_summary["Avg"] = (bat_summary["Runs"] / bat_summary["Dismissals"].replace(0, 1)).round(2)
+            bat_summary["Venue_Index"] = ((bat_summary["SR"] * 0.5) + (bat_summary["Avg"] * 0.5)).round(1)
+
+            bat_summary = bat_summary.sort_values(by="Venue_Index", ascending=False).reset_index(drop=True)
+            bat_summary["Rank"] = bat_summary.index + 1
+
+            # Top N Slider
+            max_bats = len(bat_summary)
+            top_n_bat = st.slider("Display Top Batters", 5, min(25, max_bats), min(10, max_bats), step=5, key="top_n_venue_bat")
+            top_bats_df = bat_summary.head(top_n_bat).copy()
+
+            # Top 3 Podium Cards
+            st.markdown(f"### 🏆 Top Batters at {selected_venue}")
+            podium_cols = st.columns(min(3, len(top_bats_df)))
+            border_colors = ["#FFD700", "#C0C0C0", "#CD7F32"]
+            medals = ["🥇 1st Place", "🥈 2nd Place", "🥉 3rd Place"]
+
+            for i in range(min(3, len(top_bats_df))):
+                row = top_bats_df.iloc[i]
+                with podium_cols[i]:
+                    st.markdown(
+                        f"""
+                        <div style="background-color: #FFFFFF; border: 1px solid #E5E7EB; border-top: 5px solid {border_colors[i]}; border-radius: 10px; padding: 14px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                            <span style="font-size: 12px; font-weight: 700; color: #6B7280;">{medals[i]}</span>
+                            <h4 style="margin: 4px 0 2px 0; font-size: 18px; color: #111827;">{row['batter']}</h4>
+                            <div style="font-size: 26px; font-weight: 800; color: #2563EB;">{row['Venue_Index']} <span style="font-size: 12px; color: #6B7280;">Pts</span></div>
+                            <div style="font-size: 12px; color: #4B5563; margin-top: 6px;">
+                                🏏 <b>{row['Runs']}</b> Runs &nbsp;|&nbsp; ⚡ <b>{row['SR']}</b> SR &nbsp;|&nbsp; 📊 <b>{row['Avg']}</b> Avg
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Clean Bar Chart
+            st.markdown("### 📊 Venue Performance Index Leaderboard")
+            chart_df = top_bats_df.iloc[::-1].copy()
+
+            fig_bat = go.Figure(go.Bar(
+                y=chart_df['batter'],
+                x=chart_df['Venue_Index'],
+                orientation='h',
+                marker=dict(
+                    color=chart_df['Venue_Index'],
+                    colorscale='Blues',
+                    showscale=False,
+                    cornerradius=4
+                ),
+                text=[f"  <b>{v:.1f} Pts</b>" for v in chart_df['Venue_Index']],
+                textposition='outside',
+                textfont=dict(size=12, color='#1E40AF'),
+                customdata=chart_df[['Runs', 'SR', 'Avg', 'Innings', 'Balls']].values,
+                hovertemplate=(
+                    "<b>%{y}</b><br><br>" +
+                    "📈 <b>Venue Index:</b> %{x:.1f} Pts<br>" +
+                    "🏏 <b>Runs:</b> %{customdata[0]} (%{customdata[3]} Innings, %{customdata[4]} Balls)<br>" +
+                    "⚡ <b>Strike Rate:</b> %{customdata[1]:.2f}<br>" +
+                    "📊 <b>Average:</b> %{customdata[2]:.2f}<extra></extra>"
+                )
+            ))
+
+            max_pts = chart_df['Venue_Index'].max()
+            fig_bat.update_layout(
+                height=max(350, top_n_bat * 34),
+                margin=dict(l=20, r=60, t=10, b=30),
+                xaxis=dict(title='Venue Index Score', showgrid=True, gridcolor='#F3F4F6', range=[0, max_pts * 1.18]),
+                yaxis=dict(showgrid=False, tickfont=dict(size=13, color='#111827', weight='bold')),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
+            st.plotly_chart(fig_bat, use_container_width=True)
+
+            # Data Table
+            with st.expander("📄 View Full Batting Leaderboard Table"):
+                st.dataframe(
+                    top_bats_df[['Rank', 'batter', 'Innings', 'Runs', 'Balls', 'SR', 'Avg', 'Venue_Index']].rename(
+                        columns={'batter': 'Batter Name', 'SR': 'Strike Rate', 'Venue_Index': 'Venue Index'}
+                    ),
+                    use_container_width=True,
+                    hide_index=True
+                )
+        else:
+            st.info(f"No batters met the minimum qualification threshold of {min_balls_bat} balls faced at {selected_venue}.")
+
+    # ====================================================
+    # BOWLING VENUE SPECIALISTS
+    # ====================================================
+    else:
+        bowl_summary = (
+            v_data.groupby("bowler")
+            .agg(
+                Innings=("match_id", "nunique"),
+                Runs_Conceded=("runs_total", "sum"),
+                Balls_Bowled=("valid_ball", "sum"),
+                Wickets=("is_wicket", "sum"),
+            )
+            .reset_index()
+        )
+
+        # Filter by qualification threshold
+        bowl_summary = bowl_summary[bowl_summary["Balls_Bowled"] >= min_balls_bowl].copy()
+
+        if not bowl_summary.empty:
+            bowl_summary["Economy"] = ((bowl_summary["Runs_Conceded"] / bowl_summary["Balls_Bowled"]) * 6).round(2)
+            
+            # Bowling SR = Balls per Wicket (Lower is better, replaced 0 wickets with max balls to avoid divide-by-zero)
+            bowl_summary["Bowling_SR"] = np.where(
+                bowl_summary["Wickets"] > 0,
+                (bowl_summary["Balls_Bowled"] / bowl_summary["Wickets"]).round(2),
+                bowl_summary["Balls_Bowled"]
+            )
+
+            # Bowler Venue Index calculation (Lower Eco & Lower SR give higher index score)
+            bowl_summary["Venue_Index"] = (
+                ((100 / bowl_summary["Economy"].replace(0, 1)) * 0.6) + 
+                ((100 / bowl_summary["Bowling_SR"].replace(0, 1)) * 0.4)
+            ).round(1)
+
+            bowl_summary = bowl_summary.sort_values(by="Venue_Index", ascending=False).reset_index(drop=True)
+            bowl_summary["Rank"] = bowl_summary.index + 1
+
+            # Top N Slider
+            max_bowls = len(bowl_summary)
+            top_n_bowl = st.slider("Display Top Bowlers", 5, min(25, max_bowls), min(10, max_bowls), step=5, key="top_n_venue_bowl")
+            top_bowls_df = bowl_summary.head(top_n_bowl).copy()
+
+            # Top 3 Podium Cards
+            st.markdown(f"### 🏆 Top Bowlers at {selected_venue}")
+            podium_cols_b = st.columns(min(3, len(top_bowls_df)))
+            border_colors = ["#FFD700", "#C0C0C0", "#CD7F32"]
+            medals = ["🥇 1st Place", "🥈 2nd Place", "🥉 3rd Place"]
+
+            for i in range(min(3, len(top_bowls_df))):
+                row = top_bowls_df.iloc[i]
+                with podium_cols_b[i]:
+                    st.markdown(
+                        f"""
+                        <div style="background-color: #FFFFFF; border: 1px solid #E5E7EB; border-top: 5px solid {border_colors[i]}; border-radius: 10px; padding: 14px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                            <span style="font-size: 12px; font-weight: 700; color: #6B7280;">{medals[i]}</span>
+                            <h4 style="margin: 4px 0 2px 0; font-size: 18px; color: #111827;">{row['bowler']}</h4>
+                            <div style="font-size: 26px; font-weight: 800; color: #7C3AED;">{row['Venue_Index']} <span style="font-size: 12px; color: #6B7280;">Pts</span></div>
+                            <div style="font-size: 12px; color: #4B5563; margin-top: 6px;">
+                                🎯 <b>{row['Wickets']}</b> Wkts &nbsp;|&nbsp; 📉 <b>{row['Economy']}</b> Eco &nbsp;|&nbsp; ⚡ <b>{row['Bowling_SR']}</b> Bowl SR
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Clean Bar Chart
+            st.markdown("### 📊 Venue Performance Index Leaderboard")
+            chart_bowl_df = top_bowls_df.iloc[::-1].copy()
+
+            fig_bowl = go.Figure(go.Bar(
+                y=chart_bowl_df['bowler'],
+                x=chart_bowl_df['Venue_Index'],
+                orientation='h',
+                marker=dict(
+                    color=chart_bowl_df['Venue_Index'],
+                    colorscale='Purples',
+                    showscale=False,
+                    cornerradius=4
+                ),
+                text=[f"  <b>{v:.1f} Pts</b>" for v in chart_bowl_df['Venue_Index']],
+                textposition='outside',
+                textfont=dict(size=12, color='#5B21B6'),
+                customdata=chart_bowl_df[['Wickets', 'Economy', 'Bowling_SR', 'Innings', 'Balls_Bowled', 'Runs_Conceded']].values,
+                hovertemplate=(
+                    "<b>%{y}</b><br><br>" +
+                    "📈 <b>Venue Index:</b> %{x:.1f} Pts<br>" +
+                    "🎯 <b>Wickets:</b> %{customdata[0]} (%{customdata[3]} Innings, %{customdata[4]} Balls)<br>" +
+                    "📉 <b>Economy Rate:</b> %{customdata[1]:.2f}<br>" +
+                    "⚡ <b>Bowling Strike Rate:</b> %{customdata[2]:.2f} balls/wkt<extra></extra>"
+                )
+            ))
+
+            max_pts_b = chart_bowl_df['Venue_Index'].max()
+            fig_bowl.update_layout(
+                height=max(350, top_n_bowl * 34),
+                margin=dict(l=20, r=60, t=10, b=30),
+                xaxis=dict(title='Venue Index Score', showgrid=True, gridcolor='#F3F4F6', range=[0, max_pts_b * 1.18]),
+                yaxis=dict(showgrid=False, tickfont=dict(size=13, color='#111827', weight='bold')),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
+            st.plotly_chart(fig_bowl, use_container_width=True)
+
+            # Data Table
+            with st.expander("📄 View Full Bowling Leaderboard Table"):
+                st.dataframe(
+                    top_bowls_df[['Rank', 'bowler', 'Innings', 'Wickets', 'Balls_Bowled', 'Runs_Conceded', 'Economy', 'Bowling_SR', 'Venue_Index']].rename(
+                        columns={
+                            'bowler': 'Bowler Name',
+                            'Balls_Bowled': 'Balls Bowled',
+                            'Runs_Conceded': 'Runs Conceded',
+                            'Economy': 'Economy Rate',
+                            'Bowling_SR': 'Bowling SR',
+                            'Venue_Index': 'Venue Index'
+                        }
+                    ),
+                    use_container_width=True,
+                    hide_index=True
+                )
+        else:
+            st.info(f"No bowlers met the minimum qualification threshold of {min_balls_bowl} balls bowled at {selected_venue}.")
+
+else:
+    st.info("No venue data available for the selected view mode / season.")
