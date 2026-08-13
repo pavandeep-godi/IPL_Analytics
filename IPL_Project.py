@@ -67,13 +67,17 @@ def load_ball_data(file_path: str) -> pd.DataFrame:
     df = pd.read_csv(file_path)
 
     # Downcast string columns to 'category' to drastically reduce memory usage
-    category_cols = [
-        "venue", "city", "batting_team", "bowling_team", 
-        "batter", "bowler", "non_striker", "match_type", "event_name"
-    ]
+    category_cols = ['venue', 'batting_team', 'bowling_team', 'batter', 'bowler', 'wicket_kind']
+
     for col in category_cols:
         if col in df.columns:
-            df[col] = df[col].astype("category")
+            df[col] = df[col].astype('category')
+
+    # Keep numeric columns intact:
+    numeric_cols = ['runs_batter', 'runs_extras', 'runs_total', 'runs_bowler', 'valid_ball', 'bowler_wicket']
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
     return df
 
