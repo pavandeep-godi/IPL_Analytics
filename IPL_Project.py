@@ -594,7 +594,7 @@ def create_modern_progress_bar(value, target, label, color):
 
 
 # ==========================================
-# ALL-ROUNDERS SECTION (Memory Optimized)
+# ALL-ROUNDERS SECTION (Memory Optimized + Auto-run)
 # ==========================================
 st.markdown("---")
 st.title("⚡ Top All-Rounders Performance")
@@ -624,7 +624,7 @@ MIN_RUNS = 15 if is_year_wise else 50
 MIN_WICKETS = 2 if is_year_wise else 5
 
 # ----------------------------------------------------
-# Step 1: Filter Qualified All-Rounders (Memory projection)
+# Step 1: Filter Qualified All-Rounders
 # ----------------------------------------------------
 batting_totals = df_allround.groupby("batter")["runs_batter"].sum()
 bowling_totals = df_allround.groupby("bowler")["bowler_wicket"].sum()
@@ -639,6 +639,7 @@ allrounders_options = sorted(
 if not allrounders_options:
   st.info("No all-rounders met the threshold for the currently selected filter.")
 else:
+  # Selecting a player automatically triggers the calculations below
   selected_allrounder = st.selectbox(
       label=(
           f"Select All-Rounder ({len(allrounders_options)} players qualified)"
@@ -647,184 +648,180 @@ else:
       key="allrounder_selectbox",
   )
 
-  if st.button("Analyze All-Rounder Impact", key="allrounder_btn"):
-
-    # ----------------------------------------------------
-    # Step 2 & 3: Match-by-Match Stats (Column Selection Projection)
-    # ----------------------------------------------------
-    bat_mask = df_allround["batter"] == selected_allrounder
-    batter_matches = (
-        df_allround.loc[
-            bat_mask,
-            ["match_id", "runs_batter", "batter_ball", "batting_team", "bowling_team"],
-        ]
-        .groupby("match_id", as_index=False)
-        .agg(
-            runs_scored=("runs_batter", "sum"),
-            balls_faced=("batter_ball", "sum"),
-            batting_team=("batting_team", "first"),
-            bowling_team=("bowling_team", "first"),
-        )
-    )
-
-    bowl_mask = df_allround["bowler"] == selected_allrounder
-    bowler_matches = (
-        df_allround.loc[
-            bowl_mask,
-            [
-                "match_id",
-                "bowler_wicket",
-                "runs_bowler",
-                "valid_ball",
-                "bowling_team",
-                "batting_team",
-            ],
-        ]
-        .groupby("match_id", as_index=False)
-        .agg(
-            wickets_taken=("bowler_wicket", "sum"),
-            runs_conceded=("runs_bowler", "sum"),
-            balls_bowled=("valid_ball", "sum"),
-            bowl_batting_team=("bowling_team", "first"),
-            bowl_bowling_team=("batting_team", "first"),
-        )
-    )
-
-    # ----------------------------------------------------
-    # Step 4: Merge Batting & Bowling Stats per Match
-    # ----------------------------------------------------
-    match_perf = pd.merge(
-        batter_matches, bowler_matches, on="match_id", how="outer"
-    )
-
-    # Clean team names without allocating unnecessary intermediate DataFrames
-    match_perf["batting_team"] = match_perf["batting_team"].fillna(
-        match_perf["bowl_batting_team"]
-    )
-    match_perf["bowling_team"] = match_perf["bowling_team"].fillna(
-        match_perf["bowl_bowling_team"]
-    )
-    match_perf.drop(
-        columns=["bowl_batting_team", "bowl_bowling_team"],
-        inplace=True,
-        errors="ignore",
-    )
-
-    # Memory downcasting for numeric metrics
-    numeric_cols = [
-        "runs_scored",
-        "balls_faced",
-        "wickets_taken",
-        "runs_conceded",
-        "balls_bowled",
-    ]
-    for col in numeric_cols:
-      match_perf[col] = match_perf[col].fillna(0).astype("int16")
-
-    if "year" in df_allround.columns:
-      match_year_map = (
-          df_allround[["match_id", "year"]]
-          .drop_duplicates()
-          .set_index("match_id")["year"]
+  # ----------------------------------------------------
+  # Step 2 & 3: Match-by-Match Stats (Runs on Selection)
+  # ----------------------------------------------------
+  bat_mask = df_allround["batter"] == selected_allrounder
+  batter_matches = (
+      df_allround.loc[
+          bat_mask,
+          ["match_id", "runs_batter", "batter_ball", "batting_team", "bowling_team"],
+      ]
+      .groupby("match_id", as_index=False)
+      .agg(
+          runs_scored=("runs_batter", "sum"),
+          balls_faced=("batter_ball", "sum"),
+          batting_team=("batting_team", "first"),
+          bowling_team=("bowling_team", "first"),
       )
-      match_perf["year"] = (
-          match_perf["match_id"].map(match_year_map).astype("int16")
+  )
+
+  bowl_mask = df_allround["bowler"] == selected_allrounder
+  bowler_matches = (
+      df_allround.loc[
+          bowl_mask,
+          [
+              "match_id",
+              "bowler_wicket",
+              "runs_bowler",
+              "valid_ball",
+              "bowling_team",
+              "batting_team",
+          ],
+      ]
+      .groupby("match_id", as_index=False)
+      .agg(
+          wickets_taken=("bowler_wicket", "sum"),
+          runs_conceded=("runs_bowler", "sum"),
+          balls_bowled=("valid_ball", "sum"),
+          bowl_batting_team=("bowling_team", "first"),
+          bowl_bowling_team=("batting_team", "first"),
       )
+  )
 
-    # Clear intermediate data from RAM
-    del batter_matches, bowler_matches
-    gc.collect()
+  # ----------------------------------------------------
+  # Step 4: Merge Batting & Bowling Stats per Match
+  # ----------------------------------------------------
+  match_perf = pd.merge(
+      batter_matches, bowler_matches, on="match_id", how="outer"
+  )
 
-    # ----------------------------------------------------
-    # Step 5: Categorize Contribution Types
-    # ----------------------------------------------------
-    dual_mask = (match_perf["runs_scored"] >= 20) & (
-        match_perf["wickets_taken"] >= 1
+  # Clean team names without allocating unnecessary intermediate DataFrames
+  match_perf["batting_team"] = match_perf["batting_team"].fillna(
+      match_perf["bowl_batting_team"]
+  )
+  match_perf["bowling_team"] = match_perf["bowling_team"].fillna(
+      match_perf["bowl_bowling_team"]
+  )
+  match_perf.drop(
+      columns=["bowl_batting_team", "bowl_bowling_team"],
+      inplace=True,
+      errors="ignore",
+  )
+
+  # Memory downcasting for numeric metrics
+  numeric_cols = [
+      "runs_scored",
+      "balls_faced",
+      "wickets_taken",
+      "runs_conceded",
+      "balls_bowled",
+  ]
+  for col in numeric_cols:
+    match_perf[col] = match_perf[col].fillna(0).astype("int16")
+
+  if "year" in df_allround.columns:
+    match_year_map = (
+        df_allround[["match_id", "year"]]
+        .drop_duplicates()
+        .set_index("match_id")["year"]
     )
-    dual_impact_df = match_perf[dual_mask]
-    dual_impact_count = len(dual_impact_df)
-
-    batting_impact_count = (match_perf["runs_scored"] >= 30).sum()
-    bowling_impact_count = (match_perf["wickets_taken"] >= 2).sum()
-
-    total_runs = int(match_perf["runs_scored"].sum())
-    total_wickets = int(match_perf["wickets_taken"].sum())
-
-    # ----------------------------------------------------
-    # Step 6 & 7: Metric Cards & Progress Bars
-    # ----------------------------------------------------
-    col1, col2 = st.columns(2)
-    col1.metric("Total Runs", f"{total_runs:,}")
-    col2.metric("Total Wickets", f"{total_wickets:,}")
-
-    st.markdown("### 📊 Contribution Impact Breakdown")
-
-    max_target_dual = 10 if is_year_wise else 25
-    max_target_single = 15 if is_year_wise else 40
-
-    st.caption(
-        "🔥 **Type 1: Same-Match Dual Impact** (20+ Runs AND 1+ Wicket)"
-    )
-    st.plotly_chart(
-        create_modern_progress_bar(
-            dual_impact_count, max_target_dual, "Dual Impact", "#2563EB"
-        ),
-        use_container_width=True,
-    )
-
-    st.caption("🏏 **Type 2: Key Batting Contribution** (30+ Runs Scored)")
-    st.plotly_chart(
-        create_modern_progress_bar(
-            batting_impact_count, max_target_single, "Batting Impact", "#16A34A"
-        ),
-        use_container_width=True,
+    match_perf["year"] = (
+        match_perf["match_id"].map(match_year_map).astype("int16")
     )
 
-    st.caption("⚾ **Type 3: Key Bowling Contribution** (2+ Wickets Taken)")
-    st.plotly_chart(
-        create_modern_progress_bar(
-            bowling_impact_count, max_target_single, "Bowling Impact", "#DC2626"
-        ),
-        use_container_width=True,
-    )
+  # Clear intermediate data from RAM
+  del batter_matches, bowler_matches
+  gc.collect()
 
-    # ----------------------------------------------------
-    # Step 8: Detailed Informative Table
-    # ----------------------------------------------------
-    with st.expander("📄 View Dual Impact Match Details"):
-      if dual_impact_count > 0:
-        cols_to_display = [
-            "batting_team",
-            "bowling_team",
-            "runs_scored",
-            "balls_faced",
-            "wickets_taken",
-            "runs_conceded",
-        ]
-        rename_dict = {
-            "batting_team": "Team",
-            "bowling_team": "Opponent",
-            "runs_scored": "Runs Scored",
-            "balls_faced": "Balls Faced",
-            "wickets_taken": "Wickets Taken",
-            "runs_conceded": "Runs Conceded",
-        }
+  # ----------------------------------------------------
+  # Step 5: Categorize Contribution Types
+  # ----------------------------------------------------
+  dual_mask = (match_perf["runs_scored"] >= 20) & (
+      match_perf["wickets_taken"] >= 1
+  )
+  dual_impact_df = match_perf[dual_mask]
+  dual_impact_count = len(dual_impact_df)
 
-        if "year" in dual_impact_df.columns:
-          cols_to_display.insert(0, "year")
-          rename_dict["year"] = "Season"
+  batting_impact_count = (match_perf["runs_scored"] >= 30).sum()
+  bowling_impact_count = (match_perf["wickets_taken"] >= 2).sum()
 
-        st.dataframe(
-            dual_impact_df[cols_to_display].rename(columns=rename_dict),
-            use_container_width=True,
-            hide_index=True,
-        )
-      else:
-        st.info(
-            "No dual-impact matches found for this player matching the"
-            " threshold."
-        )
+  total_runs = int(match_perf["runs_scored"].sum())
+  total_wickets = int(match_perf["wickets_taken"].sum())
 
+  # ----------------------------------------------------
+  # Step 6 & 7: Metric Cards & Progress Bars
+  # ----------------------------------------------------
+  col1, col2 = st.columns(2)
+  col1.metric("Total Runs", f"{total_runs:,}")
+  col2.metric("Total Wickets", f"{total_wickets:,}")
+
+  st.markdown("### 📊 Contribution Impact Breakdown")
+
+  max_target_dual = 10 if is_year_wise else 25
+  max_target_single = 15 if is_year_wise else 40
+
+  st.caption("🔥 **Type 1: Same-Match Dual Impact** (20+ Runs AND 1+ Wicket)")
+  st.plotly_chart(
+      create_modern_progress_bar(
+          dual_impact_count, max_target_dual, "Dual Impact", "#2563EB"
+      ),
+      use_container_width=True,
+  )
+
+  st.caption("🏏 **Type 2: Key Batting Contribution** (30+ Runs Scored)")
+  st.plotly_chart(
+      create_modern_progress_bar(
+          batting_impact_count, max_target_single, "Batting Impact", "#16A34A"
+      ),
+      use_container_width=True,
+  )
+
+  st.caption("⚾ **Type 3: Key Bowling Contribution** (2+ Wickets Taken)")
+  st.plotly_chart(
+      create_modern_progress_bar(
+          bowling_impact_count, max_target_single, "Bowling Impact", "#DC2626"
+      ),
+      use_container_width=True,
+  )
+
+  # ----------------------------------------------------
+  # Step 8: Detailed Informative Table
+  # ----------------------------------------------------
+  with st.expander("📄 View Dual Impact Match Details"):
+    if dual_impact_count > 0:
+      cols_to_display = [
+          "batting_team",
+          "bowling_team",
+          "runs_scored",
+          "balls_faced",
+          "wickets_taken",
+          "runs_conceded",
+      ]
+      rename_dict = {
+          "batting_team": "Team",
+          "bowling_team": "Opponent",
+          "runs_scored": "Runs Scored",
+          "balls_faced": "Balls Faced",
+          "wickets_taken": "Wickets Taken",
+          "runs_conceded": "Runs Conceded",
+      }
+
+      if "year" in dual_impact_df.columns:
+        cols_to_display.insert(0, "year")
+        rename_dict["year"] = "Season"
+
+      st.dataframe(
+          dual_impact_df[cols_to_display].rename(columns=rename_dict),
+          use_container_width=True,
+          hide_index=True,
+      )
+    else:
+      st.info(
+          "No dual-impact matches found for this player matching the"
+          " threshold."
+      )
+      
 # ==========================================
 # FIELDING IMPACT SECTION (Filter-Aware)
 # ==========================================
