@@ -28,12 +28,12 @@ def custom_plotly_chart(fig, *args, **kwargs):
 st.plotly_chart = custom_plotly_chart
 
 
-st.title("IPL Analytics")
+st.title("IPL Auction Analytics Hub")
 
 image = Image.open("IPL_LOGO.jpg")
 st.image(image)
 
-st.title("Welcome to your all-in-one, single-page solution for deep-dive IPL auction analytics, player performance breakdowns, and strategic insights. Whether you are analyzing all-round impact or evaluating fielding metrics, this interactive platform delivers everything you need at a glance.")
+st.markdown("Welcome to your all-in-one, single-page solution for deep-dive IPL auction analytics, player performance breakdowns, and strategic insights. Whether you are analyzing all-round impact or evaluating fielding metrics, this interactive platform delivers everything you need at a glance.")
 
 
 ball2ball_data=pd.read_csv("ball2ball_df.csv")
