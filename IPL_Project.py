@@ -550,7 +550,7 @@ def create_modern_progress_bar(value, target, label, color):
           y=[label],
           x=[target],
           orientation="h",
-          marker=dict(color="#E5E7EB", cornerradius=6),
+          marker=dict(color="#E5E7EB"),
           hoverinfo="none",
           showlegend=False,
       )
@@ -562,7 +562,7 @@ def create_modern_progress_bar(value, target, label, color):
           y=[label],
           x=[value],
           orientation="h",
-          marker=dict(color=color, cornerradius=6),
+          marker=dict(color=color),
           text=[f" <b>{value} Matches</b>"],
           textposition="inside",
           insidetextanchor="start",
