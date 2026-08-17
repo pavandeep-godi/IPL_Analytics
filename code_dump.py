@@ -640,3 +640,228 @@ else:
             else:
                 st.info("No dual-impact matches found for this player matching the threshold.")
 
+# ==========================================
+# CHASE PRESSURE INDEX SECTION (Filter-Aware)
+# ==========================================
+st.markdown("---")
+st.title("🎯 Chase Pressure Index (CPI)")
+
+with st.expander("ℹ️ How is CPI Calculated?"):
+    st.latex(r"\text{CPI} = (\text{Strike Rate} \times 0.5) + (\text{Average} \times 0.3) + \left(\frac{\text{Runs in 180+ Targets}}{\text{Total Runs}} \times 20\right)")
+    st.markdown("""
+    * **⚡ Strike Rate (50%)** — Scoring speed during chases
+    * **📊 Average (30%)** — Consistency and match-finishing ability
+    * **🔥 High Target Bonus (20%)** — Performance under high pressure ($\ge 180$ target)
+    """)
+
+# ----------------------------------------------------
+# Step 0: Apply View Mode Filter (All-Time vs Year-Wise)
+# ----------------------------------------------------
+df_chase = ball2ball_data.copy()
+if "view_mode" in locals() and view_mode == "Year-Wise Top 20":
+    df_chase = df_chase[df_chase["year"] == selected_year]
+
+# Filter strictly for 2nd innings with a defined target
+chase_data = df_chase[
+    (df_chase["innings"] == 2) & 
+    (df_chase["runs_target"].notna())
+].copy()
+
+if not chase_data.empty:
+
+    # ----------------------------------------------------
+    # Step 1: Calculate Chase Stats per Batter
+    # ----------------------------------------------------
+    chase_summary = (
+        chase_data.groupby("batter")
+        .agg(
+            Innings_Chased=("match_id", "nunique"),
+            Chase_Runs=("runs_batter", "sum"),
+            Chase_Balls=("valid_ball", "sum"),
+            Chase_Dismissals=("player_out", "count"),
+            Fours=("runs_batter", lambda x: (x == 4).sum()),
+            Sixes=("runs_batter", lambda x: (x == 6).sum()),
+            High_Target_Runs=(
+                "runs_batter",
+                lambda x: x[chase_data.loc[x.index, "runs_target"] >= 180].sum(),
+            ),
+        )
+        .reset_index()
+    )
+
+    # Qualification Threshold: Minimum 100 balls faced for All-Time mode
+    # (Adjusted to 30 for Year-Wise mode to account for shorter single-season sample sizes)
+    min_balls_chase = 100 if ("view_mode" in locals() and view_mode == "All-Time Top 20") else 30
+    chase_summary = chase_summary[chase_summary["Chase_Balls"] >= min_balls_chase].copy()
+
+    if not chase_summary.empty:
+
+        # Derived Performance Metrics
+        chase_summary["Chase_SR"] = (
+            (chase_summary["Chase_Runs"] / chase_summary["Chase_Balls"]) * 100
+        ).round(2)
+
+        chase_summary["Chase_Avg"] = (
+            chase_summary["Chase_Runs"] / chase_summary["Chase_Dismissals"].replace(0, 1)
+        ).round(2)
+
+        chase_summary["Boundary_%"] = (
+            ((chase_summary["Fours"] * 4 + chase_summary["Sixes"] * 6) / chase_summary["Chase_Runs"].replace(0, 1)) * 100
+        ).round(2)
+
+        # Composite Chase Pressure Index Score
+        chase_summary["Chase_Pressure_Index"] = (
+            (chase_summary["Chase_SR"] * 0.5) + 
+            (chase_summary["Chase_Avg"] * 0.3) + 
+            ((chase_summary["High_Target_Runs"] / chase_summary["Chase_Runs"].replace(0, 1)) * 20)
+        ).round(1)
+
+        # Sort descending by Chase Pressure Index
+        chase_summary = chase_summary.sort_values(by="Chase_Pressure_Index", ascending=False).reset_index(drop=True)
+        chase_summary["Rank"] = chase_summary.index + 1
+
+        # ----------------------------------------------------
+        # Step 2: User Controls (Top N Slider)
+        # ----------------------------------------------------
+        max_available_chasers = len(chase_summary)
+        slider_max_c = min(25, max_available_chasers)
+        slider_min_c = min(5, max_available_chasers)
+
+        col_c1, col_c2 = st.columns([1, 2])
+        with col_c1:
+            top_n_chase = st.slider(
+                "Select Top Chasers to Display",
+                min_value=slider_min_c,
+                max_value=slider_max_c,
+                value=min(10, slider_max_c),
+                step=5,
+                key="chase_top_n_slider"
+            )
+
+        top_chasers_df = chase_summary.head(top_n_chase).copy()
+
+        # ----------------------------------------------------
+        # Step 3: Top 3 Winner Podium Cards
+        # ----------------------------------------------------
+        st.markdown("### 🏆 Top Chase Master Performers")
+
+        podium_cols_c = st.columns(min(3, len(top_chasers_df)))
+        medals_c = ["🥇 1st Place", "🥈 2nd Place", "🥉 3rd Place"]
+        border_colors_c = ["#FFD700", "#C0C0C0", "#CD7F32"]
+
+        for idx in range(min(3, len(top_chasers_df))):
+            row = top_chasers_df.iloc[idx]
+            with podium_cols_c[idx]:
+                st.markdown(
+                    f"""
+                    <div style="
+                        background-color: #FFFFFF;
+                        border: 1px solid #E5E7EB;
+                        border-top: 5px solid {border_colors_c[idx]};
+                        border-radius: 10px;
+                        padding: 16px;
+                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+                        text-align: center;
+                    ">
+                        <span style="font-size: 13px; font-weight: 700; color: #6B7280; text-transform: uppercase;">{medals_c[idx]}</span>
+                        <h3 style="margin: 6px 0 2px 0; font-size: 20px; color: #111827;">{row['batter']}</h3>
+                        <div style="font-size: 28px; font-weight: 800; color: #16A34A;">{row['Chase_Pressure_Index']} <span style="font-size: 13px; font-weight: 500; color: #6B7280;">CPI</span></div>
+                        <div style="margin-top: 8px; font-size: 12px; color: #4B5563;">
+                            🏏 <b>{row['Chase_Runs']}</b> Runs &nbsp;|&nbsp; ⚡ <b>{row['Chase_SR']}</b> SR &nbsp;|&nbsp; 📊 <b>{row['Chase_Avg']}</b> Avg
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ----------------------------------------------------
+        # Step 4: Clean & Intuitive CPI Leaderboard Chart
+        # ----------------------------------------------------
+        st.markdown("### 📊 Chase Pressure Index (CPI) Leaderboard")
+
+        # Reverse dataframe order for top-to-bottom bar chart display
+        chart_chase_df = top_chasers_df.iloc[::-1].copy()
+
+        # Build clean horizontal bar chart with color gradient
+        fig_chase = go.Figure()
+
+        fig_chase.add_trace(go.Bar(
+            y=chart_chase_df['batter'],
+            x=chart_chase_df['Chase_Pressure_Index'],
+            orientation='h',
+            marker=dict(
+                color=chart_chase_df['Chase_Pressure_Index'],
+                colorscale='Emrld',  # Clean green gradient
+                showscale=False,
+                cornerradius=4
+            ),
+            # Display formatted CPI score on each bar
+            text=[f"  <b>{val:.1f} CPI</b>" for val in chart_chase_df['Chase_Pressure_Index']],
+            textposition='outside',
+            textfont=dict(size=13, color='#0F766E', family='sans-serif'),
+            # Custom Hover Tooltip Template
+            customdata=chart_chase_df[['Chase_Runs', 'Chase_SR', 'Chase_Avg', 'High_Target_Runs', 'Innings_Chased']].values,
+            hovertemplate=(
+                "<b>%{y}</b><br><br>" +
+                "🎯 <b>CPI Score:</b> %{x:.1f}<br>" +
+                "🏏 <b>Chase Runs:</b> %{customdata[0]} (%{customdata[4]} Innings)<br>" +
+                "⚡ <b>Strike Rate:</b> %{customdata[1]:.2f}<br>" +
+                "📊 <b>Average:</b> %{customdata[2]:.2f}<br>" +
+                "🔥 <b>Runs in 180+ Chases:</b> %{customdata[3]}<extra></extra>"
+            )
+        ))
+
+        # Add margin to x-axis max so text labels aren't cut off
+        max_cpi = chart_chase_df['Chase_Pressure_Index'].max()
+
+        fig_chase.update_layout(
+            height=max(360, top_n_chase * 36),
+            margin=dict(l=20, r=60, t=20, b=30),
+            xaxis=dict(
+                title='Chase Pressure Index Score',
+                showgrid=True,
+                gridcolor='#F3F4F6',
+                zeroline=False,
+                range=[0, max_cpi * 1.18]  # Extra headroom for labels
+            ),
+            yaxis=dict(
+                showgrid=False,
+                tickfont=dict(size=13, color='#111827', weight='bold')
+            ),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+
+        st.plotly_chart(fig_chase, use_container_width=True)
+
+        # ----------------------------------------------------
+        # Step 5: Leaderboard Table Expander
+        # ----------------------------------------------------
+        with st.expander("📄 View Full Chase Pressure Index Leaderboard Table"):
+            display_chase = chase_summary[[
+                'Rank', 'batter', 'Innings_Chased', 'Chase_Runs', 'Chase_Balls', 
+                'Chase_SR', 'Chase_Avg', 'High_Target_Runs', 'Boundary_%', 'Chase_Pressure_Index'
+            ]].rename(columns={
+                'batter': 'Batter Name',
+                'Innings_Chased': 'Innings Chased',
+                'Chase_Runs': 'Chase Runs',
+                'Chase_Balls': 'Balls Faced',
+                'Chase_SR': 'Strike Rate',
+                'Chase_Avg': 'Average',
+                'High_Target_Runs': 'Runs in 180+ Targets',
+                'Boundary_%': 'Boundary %',
+                'Chase_Pressure_Index': 'Chase Pressure Index (CPI)'
+            })
+
+            st.dataframe(
+                display_chase,
+                use_container_width=True,
+                hide_index=True
+            )
+    else:
+        st.info(f"No batters met the minimum qualification threshold of {min_balls_chase} balls faced while chasing.")
+else:
+    st.info("No chase data available for the selected view mode / season.")
+
