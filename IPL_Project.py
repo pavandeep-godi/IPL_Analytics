@@ -228,7 +228,7 @@ with tab_batting:
         "💎 Bankable Batters (Career Analysis of 400+ Runs & ≥150 SR Seasons)"
     )
 
-    # Calculate season-by-season performance for all batters
+    # Step 1: Calculate season-by-season aggregates for every batter
     season_stats = (
         ball2ball_data.groupby(["batter", "year"])
         .agg(
@@ -242,7 +242,7 @@ with tab_batting:
         (season_stats["Season_Runs"] / season_stats["Season_Balls"]) * 100
     ).round(2)
 
-    # Filter "Bankable" season threshold
+    # Step 2: Flag "Bankable" seasons
     bankable_seasons = season_stats[
         (season_stats["Season_Runs"] >= 400) & (season_stats["Season_SR"] >= 150.0)
     ].copy()
@@ -250,7 +250,7 @@ with tab_batting:
     if bankable_seasons.empty:
       st.warning("No batters met the Bankable criteria (≥ 400 Runs & ≥ 150 SR).")
     else:
-      # Calculate overall Career Totals
+      # Step 3: Compute Overall Career Totals
       career_totals = (
           ball2ball_data.groupby("batter")
           .agg(
@@ -263,7 +263,33 @@ with tab_batting:
           (career_totals["Career_Runs"] / career_totals["Career_Balls"]) * 100
       ).round(2)
 
-      # Group bankable achievements per batter
+      # Step 4: Find the exact year where maximum Runs and SR occurred
+      idx_max_runs = bankable_seasons.groupby("batter")[
+          "Season_Runs"
+      ].idxmax()
+      idx_max_sr = bankable_seasons.groupby("batter")["Season_SR"].idxmax()
+
+      best_runs_df = bankable_seasons.loc[
+          idx_max_runs, ["batter", "Season_Runs", "year"]
+      ].copy()
+      best_runs_df["Best_Season_Runs_Formatted"] = (
+          best_runs_df["Season_Runs"].astype(str)
+          + " ("
+          + best_runs_df["year"].astype(str)
+          + ")"
+      )
+
+      best_sr_df = bankable_seasons.loc[
+          idx_max_sr, ["batter", "Season_SR", "year"]
+      ].copy()
+      best_sr_df["Best_Season_SR_Formatted"] = (
+          best_sr_df["Season_SR"].astype(str)
+          + " ("
+          + best_sr_df["year"].astype(str)
+          + ")"
+      )
+
+      # Step 5: Count bankable seasons and join season years
       bankable_summary = (
           bankable_seasons.groupby("batter")
           .agg(
@@ -272,43 +298,55 @@ with tab_batting:
                   "year",
                   lambda x: ", ".join(map(str, sorted(x))),
               ),
-              Highest_Season_Runs=("Season_Runs", "max"),
-              Highest_Season_SR=("Season_SR", "max"),
+              Highest_Season_Runs_Numeric=("Season_Runs", "max"),
           )
           .reset_index()
       )
 
-      # Merge bankable metrics with overall career statistics
+      # Step 6: Merge everything into one dataframe
       final_bankable = pd.merge(
           bankable_summary, career_totals, on="batter", how="left"
       )
+      final_bankable = pd.merge(
+          final_bankable,
+          best_runs_df[["batter", "Best_Season_Runs_Formatted"]],
+          on="batter",
+          how="left",
+      )
+      final_bankable = pd.merge(
+          final_bankable,
+          best_sr_df[["batter", "Best_Season_SR_Formatted"]],
+          on="batter",
+          how="left",
+      )
 
-      final_bankable = final_bankable[[
-          "batter",
-          "Bankable_Seasons_Count",
-          "Bankable_Years",
-          "Highest_Season_Runs",
-          "Highest_Season_SR",
-          "Career_Runs",
-          "Career_SR",
-      ]]
-
+      # Sort by total Bankable Seasons count, then Total Career Runs
       top_20 = final_bankable.sort_values(
           by=[
               "Bankable_Seasons_Count",
               "Career_Runs",
-              "Highest_Season_Runs",
+              "Highest_Season_Runs_Numeric",
           ],
           ascending=[False, False, False],
       ).head(20)
+
+      top_20 = top_20[[
+          "batter",
+          "Bankable_Seasons_Count",
+          "Bankable_Years",
+          "Best_Season_Runs_Formatted",
+          "Best_Season_SR_Formatted",
+          "Career_Runs",
+          "Career_SR",
+      ]]
 
       top_20.rename(
           columns={
               "batter": "Batter",
               "Bankable_Seasons_Count": "Bankable Seasons",
               "Bankable_Years": "Seasons Achieved",
-              "Highest_Season_Runs": "Best Season Runs",
-              "Highest_Season_SR": "Best Season SR",
+              "Best_Season_Runs_Formatted": "Best Season Runs",
+              "Best_Season_SR_Formatted": "Best Season SR",
               "Career_Runs": "Career Runs",
               "Career_SR": "Career SR",
           },
@@ -581,7 +619,7 @@ with tab_wk:
   ).head(20)
   top_20.rename(
       columns={
-          "batter": "Wicketkeeper",
+          "batter": "Batter",
           "year": "Year",
           "Avg_Batting_Pos": "Avg Pos",
       },
