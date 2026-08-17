@@ -1019,13 +1019,14 @@ st.title("🎯 Chase Pressure Index (CPI)")
 
 with st.expander("ℹ️ How is CPI Calculated?"):
     st.latex(
-        r"\text{CPI} = (\text{Chase SR} \times 0.35) + (\text{Adjusted Avg} \times 0.35) + (\text{Runs/Innings} \times 0.15) + (\text{High Target Avg} \times 0.15)"
+        r"\text{CPI} = (N_{\text{HighTargetRuns}} \times 40) + (N_{\text{ChaseRuns}} \times 30) + (N_{\text{ChaseSR}} \times 20) + (N_{\text{ChaseAvg}} \times 10)"
     )
     st.markdown("""
-    * **⚡ Chase Strike Rate (35%)** — Scoring velocity during chases
-    * **📊 Adjusted Average (35%)** — Overall consistency, adjusted for not-out inflation (dismissal floor set to 50% of innings)
-    * **🏏 Runs per Innings (15%)** — Run volume contribution per chase
-    * **🔥 High Target Impact (15%)** — Average runs scored in high-pressure chases (targets $\ge 180$)
+    * *Note: Metrics ($N_{x}$) are normalized on a 0–100 scale relative to the dataset pool.*
+    * **🔥 High Target Chase Runs (40%)** — Raw run volume scored when chasing high targets ($\ge 180$)
+    * **🏏 Total Chase Volume (30%)** — Cumulative chase runs across all targets
+    * **⚡ Chase Strike Rate (20%)** — Scoring rate velocity during chases
+    * **📊 Traditional Chase Average (10%)** — Consistency and match-finishing ability
     """)
 
 # ----------------------------------------------------
@@ -1043,16 +1044,13 @@ chase_data = df_chase[
 if not chase_data.empty:
 
     # ----------------------------------------------------
-    # Step 1: Calculate Refined Chase Stats per Batter
+    # Step 1: Calculate Raw Chase Stats per Batter
     # ----------------------------------------------------
     # High target stats (targets >= 180)
     high_target_data = chase_data[chase_data["runs_target"] >= 180]
     high_target_stats = (
         high_target_data.groupby("batter")
-        .agg(
-            High_Target_Runs=("runs_batter", "sum"),
-            High_Target_Innings=("match_id", "nunique"),
-        )
+        .agg(High_Target_Runs=("runs_batter", "sum"))
         .reset_index()
     )
 
@@ -1077,12 +1075,9 @@ if not chase_data.empty:
     chase_summary["High_Target_Runs"] = chase_summary[
         "High_Target_Runs"
     ].fillna(0)
-    chase_summary["High_Target_Innings"] = chase_summary[
-        "High_Target_Innings"
-    ].fillna(0)
 
     # Qualification Threshold: Minimum 100 balls faced for All-Time mode
-    # (Adjusted to 30 for Year-Wise mode to account for shorter single-season sample sizes)
+    # (Adjusted to 30 for Year-Wise mode for single-season sample sizes)
     min_balls_chase = (
         100
         if ("view_mode" in locals() and view_mode == "All-Time Top 20")
@@ -1094,40 +1089,14 @@ if not chase_data.empty:
 
     if not chase_summary.empty:
 
-        # 1. Scoring Velocity (Chase SR)
+        # Derived Metrics
         chase_summary["Chase_SR"] = (
             (chase_summary["Chase_Runs"] / chase_summary["Chase_Balls"]) * 100
         ).round(2)
 
-        # 2. Traditional Average (for display)
         chase_summary["Chase_Avg"] = (
             chase_summary["Chase_Runs"]
             / chase_summary["Chase_Dismissals"].replace(0, 1)
-        ).round(2)
-
-        # 3. Adjusted Average (Smooths out lower-order not-out bias)
-        # Uses effective dismissals: max(actual_dismissals, 50% of innings)
-        chase_summary["Effective_Dismissals"] = np.maximum(
-            chase_summary["Chase_Dismissals"],
-            chase_summary["Innings_Chased"] * 0.5,
-        )
-        chase_summary["Adj_Chase_Avg"] = (
-            chase_summary["Chase_Runs"] / chase_summary["Effective_Dismissals"]
-        ).round(2)
-
-        # 4. Volume per Chase Innings
-        chase_summary["Runs_Per_Innings"] = (
-            chase_summary["Chase_Runs"] / chase_summary["Innings_Chased"]
-        ).round(2)
-
-        # 5. High Target Scoring Rate (Per High-Target Chase)
-        chase_summary["High_Target_Avg_Runs"] = chase_summary.apply(
-            lambda r: (
-                (r["High_Target_Runs"] / r["High_Target_Innings"])
-                if r["High_Target_Innings"] > 0
-                else 0
-            ),
-            axis=1,
         ).round(2)
 
         chase_summary["Boundary_%"] = (
@@ -1138,12 +1107,35 @@ if not chase_data.empty:
             * 100
         ).round(2)
 
-        # Composite Chase Pressure Index Score
+        # ----------------------------------------------------
+        # Step 1B: Min-Max Normalization Engine (0 to 100)
+        # Prevents scale mismatch between Runs (0-3000) and SR (100-160)
+        # ----------------------------------------------------
+        def normalize_series(s):
+            min_v, max_v = s.min(), s.max()
+            if max_v == min_v:
+                return pd.Series(100.0, index=s.index)
+            return ((s - min_v) / (max_v - min_v)) * 100
+
+        chase_summary["norm_HT_Runs"] = normalize_series(
+            chase_summary["High_Target_Runs"]
+        )
+        chase_summary["norm_Chase_Runs"] = normalize_series(
+            chase_summary["Chase_Runs"]
+        )
+        chase_summary["norm_Chase_SR"] = normalize_series(
+            chase_summary["Chase_SR"]
+        )
+        chase_summary["norm_Chase_Avg"] = normalize_series(
+            chase_summary["Chase_Avg"]
+        )
+
+        # Composite Chase Pressure Index
         chase_summary["Chase_Pressure_Index"] = (
-            (chase_summary["Chase_SR"] * 0.35)
-            + (chase_summary["Adj_Chase_Avg"] * 0.35)
-            + (chase_summary["Runs_Per_Innings"] * 0.15)
-            + (chase_summary["High_Target_Avg_Runs"] * 0.15)
+            (chase_summary["norm_HT_Runs"] * 0.40)
+            + (chase_summary["norm_Chase_Runs"] * 0.30)
+            + (chase_summary["norm_Chase_SR"] * 0.20)
+            + (chase_summary["norm_Chase_Avg"] * 0.10)
         ).round(1)
 
         # Sort descending by Chase Pressure Index
@@ -1199,7 +1191,7 @@ if not chase_data.empty:
                         <h3 style="margin: 6px 0 2px 0; font-size: 20px; color: #111827;">{row['batter']}</h3>
                         <div style="font-size: 28px; font-weight: 800; color: #16A34A;">{row['Chase_Pressure_Index']} <span style="font-size: 13px; font-weight: 500; color: #6B7280;">CPI</span></div>
                         <div style="margin-top: 8px; font-size: 12px; color: #4B5563;">
-                            🏏 <b>{row['Chase_Runs']}</b> Runs &nbsp;|&nbsp; ⚡ <b>{row['Chase_SR']}</b> SR &nbsp;|&nbsp; 📊 <b>{row['Adj_Chase_Avg']}</b> Adj Avg
+                            🔥 <b>{int(row['High_Target_Runs'])}</b> High Chase Runs &nbsp;|&nbsp; 🏏 <b>{int(row['Chase_Runs'])}</b> Total Runs &nbsp;|&nbsp; ⚡ <b>{row['Chase_SR']}</b> SR
                         </div>
                     </div>
                     """,
@@ -1240,22 +1232,20 @@ if not chase_data.empty:
                 # Custom Hover Tooltip Template
                 customdata=chart_chase_df[
                     [
+                        "High_Target_Runs",
                         "Chase_Runs",
                         "Chase_SR",
-                        "Adj_Chase_Avg",
-                        "Runs_Per_Innings",
-                        "High_Target_Avg_Runs",
+                        "Chase_Avg",
                         "Innings_Chased",
                     ]
                 ].values,
                 hovertemplate=(
                     "<b>%{y}</b><br><br>"
                     + "🎯 <b>CPI Score:</b> %{x:.1f}<br>"
-                    + "🏏 <b>Chase Runs:</b> %{customdata[0]} (%{customdata[5]} Innings)<br>"
-                    + "⚡ <b>Strike Rate:</b> %{customdata[1]:.2f}<br>"
-                    + "📊 <b>Adjusted Avg:</b> %{customdata[2]:.2f}<br>"
-                    + "📈 <b>Runs / Innings:</b> %{customdata[3]:.2f}<br>"
-                    + "🔥 <b>180+ Target Avg Runs:</b> %{customdata[4]:.2f}<extra></extra>"
+                    + "🔥 <b>Runs in 180+ Chases:</b> %{customdata[0]}<br>"
+                    + "🏏 <b>Total Chase Runs:</b> %{customdata[1]} (%{customdata[4]} Innings)<br>"
+                    + "⚡ <b>Strike Rate:</b> %{customdata[2]:.2f}<br>"
+                    + "📊 <b>Average:</b> %{customdata[3]:.2f}<extra></extra>"
                 ),
             )
         )
@@ -1267,7 +1257,7 @@ if not chase_data.empty:
             height=max(360, top_n_chase * 36),
             margin=dict(l=20, r=60, t=20, b=30),
             xaxis=dict(
-                title="Chase Pressure Index Score",
+                title="Chase Pressure Index Score (0-100 Scale)",
                 showgrid=True,
                 gridcolor="#F3F4F6",
                 zeroline=False,
@@ -1292,13 +1282,11 @@ if not chase_data.empty:
                     "Rank",
                     "batter",
                     "Innings_Chased",
+                    "High_Target_Runs",
                     "Chase_Runs",
                     "Chase_Balls",
                     "Chase_SR",
-                    "Adj_Chase_Avg",
                     "Chase_Avg",
-                    "Runs_Per_Innings",
-                    "High_Target_Avg_Runs",
                     "Boundary_%",
                     "Chase_Pressure_Index",
                 ]
@@ -1306,13 +1294,11 @@ if not chase_data.empty:
                 columns={
                     "batter": "Batter Name",
                     "Innings_Chased": "Innings Chased",
-                    "Chase_Runs": "Chase Runs",
+                    "High_Target_Runs": "Runs in 180+ Targets",
+                    "Chase_Runs": "Total Chase Runs",
                     "Chase_Balls": "Balls Faced",
                     "Chase_SR": "Strike Rate",
-                    "Adj_Chase_Avg": "Adjusted Avg",
-                    "Chase_Avg": "Traditional Avg",
-                    "Runs_Per_Innings": "Runs/Innings",
-                    "High_Target_Avg_Runs": "180+ Target Avg Runs",
+                    "Chase_Avg": "Average",
                     "Boundary_%": "Boundary %",
                     "Chase_Pressure_Index": "Chase Pressure Index (CPI)",
                 }
