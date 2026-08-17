@@ -97,7 +97,6 @@ tab_batting, tab_bowling, tab_wk = st.tabs(
     ["🏏 Batter Analytics", "⚡ Bowler Analytics", "🧤 WK-Batter Analytics"]
 )
 
-
 # ==============================================================================
 # SECTION 1: BATTER ANALYTICS
 # ==============================================================================
@@ -223,37 +222,100 @@ with tab_batting:
     top_20.rename(columns={"batter": "Batter", "year": "Year"}, inplace=True)
     st.dataframe(top_20, hide_index=True, use_container_width=True)
 
-  # 4. Bankable Batters (400+ Runs @ 150+ SR in a Season)
+  # 4. Bankable Batters (Multi-Season Consistency Analytics)
   elif "Bankable" in batter_metric:
-    st.subheader("💎 Bankable Season Performances (≥ 400 Runs & ≥ 150 SR)")
+    st.subheader(
+        "💎 Bankable Batters (Career Analysis of 400+ Runs & ≥150 SR Seasons)"
+    )
 
-    stats = (
-        ball2ball_data.groupby(["year", "batter"])
+    # Calculate season-by-season performance for all batters
+    season_stats = (
+        ball2ball_data.groupby(["batter", "year"])
         .agg(
-            Total_Runs=("runs_batter", "sum"),
-            Balls_Faced=("valid_ball", "sum"),
-            Fours=("runs_batter", lambda x: (x == 4).sum()),
-            Sixes=("runs_batter", lambda x: (x == 6).sum()),
+            Season_Runs=("runs_batter", "sum"),
+            Season_Balls=("valid_ball", "sum"),
         )
         .reset_index()
     )
 
-    stats["Strike Rate"] = (
-        (stats["Total_Runs"] / stats["Balls_Faced"]) * 100
+    season_stats["Season_SR"] = (
+        (season_stats["Season_Runs"] / season_stats["Season_Balls"]) * 100
     ).round(2)
 
-    bankable = stats[
-        (stats["Total_Runs"] >= 400) & (stats["Strike Rate"] >= 150.0)
-    ]
+    # Filter "Bankable" season threshold
+    bankable_seasons = season_stats[
+        (season_stats["Season_Runs"] >= 400) & (season_stats["Season_SR"] >= 150.0)
+    ].copy()
 
-    if view_mode == "Year-Wise Top 20":
-      bankable = bankable[bankable["year"] == selected_year]
+    if bankable_seasons.empty:
+      st.warning("No batters met the Bankable criteria (≥ 400 Runs & ≥ 150 SR).")
+    else:
+      # Calculate overall Career Totals
+      career_totals = (
+          ball2ball_data.groupby("batter")
+          .agg(
+              Career_Runs=("runs_batter", "sum"),
+              Career_Balls=("valid_ball", "sum"),
+          )
+          .reset_index()
+      )
+      career_totals["Career_SR"] = (
+          (career_totals["Career_Runs"] / career_totals["Career_Balls"]) * 100
+      ).round(2)
 
-    top_20 = bankable.sort_values(
-        by=["Total_Runs", "Strike Rate"], ascending=[False, False]
-    ).head(20)
-    top_20.rename(columns={"batter": "Batter", "year": "Year"}, inplace=True)
-    st.dataframe(top_20, hide_index=True, use_container_width=True)
+      # Group bankable achievements per batter
+      bankable_summary = (
+          bankable_seasons.groupby("batter")
+          .agg(
+              Bankable_Seasons_Count=("year", "count"),
+              Bankable_Years=(
+                  "year",
+                  lambda x: ", ".join(map(str, sorted(x))),
+              ),
+              Highest_Season_Runs=("Season_Runs", "max"),
+              Highest_Season_SR=("Season_SR", "max"),
+          )
+          .reset_index()
+      )
+
+      # Merge bankable metrics with overall career statistics
+      final_bankable = pd.merge(
+          bankable_summary, career_totals, on="batter", how="left"
+      )
+
+      final_bankable = final_bankable[[
+          "batter",
+          "Bankable_Seasons_Count",
+          "Bankable_Years",
+          "Highest_Season_Runs",
+          "Highest_Season_SR",
+          "Career_Runs",
+          "Career_SR",
+      ]]
+
+      top_20 = final_bankable.sort_values(
+          by=[
+              "Bankable_Seasons_Count",
+              "Career_Runs",
+              "Highest_Season_Runs",
+          ],
+          ascending=[False, False, False],
+      ).head(20)
+
+      top_20.rename(
+          columns={
+              "batter": "Batter",
+              "Bankable_Seasons_Count": "Bankable Seasons",
+              "Bankable_Years": "Seasons Achieved",
+              "Highest_Season_Runs": "Best Season Runs",
+              "Highest_Season_SR": "Best Season SR",
+              "Career_Runs": "Career Runs",
+              "Career_SR": "Career SR",
+          },
+          inplace=True,
+      )
+
+      st.dataframe(top_20, hide_index=True, use_container_width=True)
 
 
 # ==============================================================================
